@@ -124,6 +124,10 @@ const Index = () => {
               <Clock className="w-4 h-4" />
               <span className="hidden sm:inline">Geçmiş</span>
             </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowManage(true)} className="gap-1.5">
+              <PackagePlus className="w-4 h-4" />
+              <span className="hidden sm:inline">Envanter</span>
+            </Button>
           </div>
         </div>
       </header>
@@ -203,6 +207,7 @@ const Index = () => {
       <FlightSidebar isOpen={showFlights} onClose={() => setShowFlights(false)} />
       <ShiftDialog open={showShift} onOpenChange={setShowShift} />
       <LocationDialog open={showLocation} onOpenChange={setShowLocation} onConfirm={handleLocationConfirm} />
+      <WheelchairManageDialog open={showManage} onOpenChange={setShowManage} wheelchairs={wheelchairs} />
     </div>
   );
 };
