@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plane, Users, Filter, Clock, Accessibility } from "lucide-react";
+import { Plane, Users, Filter, Clock, Accessibility, PackagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,6 +10,7 @@ import WheelchairCard, { Wheelchair, WheelchairStatus } from "@/components/Wheel
 import ShiftDialog from "@/components/ShiftDialog";
 import LocationDialog from "@/components/LocationDialog";
 import HistoryLog from "@/components/HistoryLog";
+import WheelchairManageDialog from "@/components/WheelchairManageDialog";
 
 const TERMINALS = ["İç Hat", "T1", "T2"];
 
@@ -20,6 +21,7 @@ const Index = () => {
   const [showShift, setShowShift] = useState(false);
   const [showLocation, setShowLocation] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showManage, setShowManage] = useState(false);
   const [missingOnly, setMissingOnly] = useState(false);
   const [wheelchairs, setWheelchairs] = useState<Wheelchair[]>([]);
   const [selectedChairId, setSelectedChairId] = useState<string | null>(null);
