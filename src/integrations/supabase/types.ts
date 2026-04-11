@@ -48,6 +48,7 @@ export type Database = {
           id: string
           staff_name: string
           started_at: string
+          terminal: string
         }
         Insert: {
           created_at?: string
@@ -55,6 +56,7 @@ export type Database = {
           id?: string
           staff_name: string
           started_at?: string
+          terminal?: string
         }
         Update: {
           created_at?: string
@@ -62,6 +64,7 @@ export type Database = {
           id?: string
           staff_name?: string
           started_at?: string
+          terminal?: string
         }
         Relationships: []
       }
