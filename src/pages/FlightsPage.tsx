@@ -62,7 +62,7 @@ const FlightsPage = () => {
         const lines = text.split("\n").filter(Boolean);
         if (lines.length < 2) return;
 
-        const data: Flight[] = lines.slice(2).map((line) => {
+        const data: Flight[] = lines.slice(3).map((line) => {
           const cols = parseCSVLine(line);
           return {
             arrivalCode: cols[1] || "",
