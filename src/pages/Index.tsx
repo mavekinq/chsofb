@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plane, Users, Filter, Clock, Accessibility, PackagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import SplashScreen from "@/components/SplashScreen";
-import FlightSidebar from "@/components/FlightSidebar";
+
 import WheelchairCard, { Wheelchair, WheelchairStatus } from "@/components/WheelchairCard";
 import ShiftDialog from "@/components/ShiftDialog";
 import LocationDialog from "@/components/LocationDialog";
@@ -15,9 +16,9 @@ import WheelchairManageDialog from "@/components/WheelchairManageDialog";
 const TERMINALS = ["İç Hat", "T1", "T2"];
 
 const Index = () => {
+  const navigate = useNavigate();
   const [splash, setSplash] = useState(true);
   const [activeTab, setActiveTab] = useState("İç Hat");
-  const [showFlights, setShowFlights] = useState(false);
   const [showShift, setShowShift] = useState(false);
   const [showLocation, setShowLocation] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -112,7 +113,7 @@ const Index = () => {
             <h1 className="font-heading font-bold text-lg hidden sm:block">Tekerlekli Sandalye Takip</h1>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowFlights(true)} className="gap-1.5">
+            <Button variant="outline" size="sm" onClick={() => navigate("/flights")} className="gap-1.5">
               <Plane className="w-4 h-4" />
               <span className="hidden sm:inline">Uçuşlar</span>
             </Button>
@@ -204,7 +205,6 @@ const Index = () => {
         )}
       </main>
 
-      <FlightSidebar isOpen={showFlights} onClose={() => setShowFlights(false)} />
       <ShiftDialog open={showShift} onOpenChange={setShowShift} />
       <LocationDialog open={showLocation} onOpenChange={setShowLocation} onConfirm={handleLocationConfirm} />
       <WheelchairManageDialog open={showManage} onOpenChange={setShowManage} wheelchairs={wheelchairs} />
