@@ -15,24 +15,17 @@ export interface Wheelchair {
   status: WheelchairStatus;
   gate: string;
   terminal: string;
+  note?: string;
 }
 
 interface WheelchairCardProps {
   wheelchair: Wheelchair;
   onStatusChange: (id: string, status: WheelchairStatus) => void;
   onLocationChange: (id: string) => void;
+  onNoteChange: (id: string) => void;
 }
 
-const statusLabels: Record<WheelchairStatus, string> = {
-  available: "Müsait",
-  missing: "Eksik",
-  maintenance: "Bakımda",
-};
-
-const WheelchairCard = ({ wheelchair, onStatusChange, onLocationChange }: WheelchairCardProps) => {
-  const statusClass = `status-${wheelchair.status}`;
-  const dotClass = `status-dot-${wheelchair.status}`;
-
+const WheelchairCard = ({ wheelchair, onStatusChange, onLocationChange, onNoteChange }: WheelchairCardProps) => {
   return (
     <div className="bg-card border border-border rounded-lg p-4 hover:border-primary/30 transition-colors">
       <div className="flex items-start justify-between mb-3">
@@ -68,13 +61,52 @@ const WheelchairCard = ({ wheelchair, onStatusChange, onLocationChange }: Wheelc
             <DropdownMenuItem onClick={() => onLocationChange(wheelchair.id)}>
               📍 Konum Değiştir
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onNoteChange(wheelchair.id)}>
+              📝 Not Ekle / Düzenle
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
-      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusClass}`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />
-        {statusLabels[wheelchair.status]}
+      {wheelchair.note ? (
+        <p className="mt-3 text-sm text-muted-foreground line-clamp-2">
+          <span className="font-medium text-foreground">Not:</span> {wheelchair.note}
+        </p>
+      ) : null}
+
+      <div className="mt-3 grid grid-cols-2 gap-2 md:hidden">
+        <Button
+          size="sm"
+          variant={wheelchair.status === "available" ? "default" : "outline"}
+          className="text-xs"
+          onClick={() => onStatusChange(wheelchair.id, "available")}
+        >
+          ✅ Musait
+        </Button>
+        <Button
+          size="sm"
+          variant={wheelchair.status === "missing" ? "default" : "outline"}
+          className="text-xs"
+          onClick={() => onStatusChange(wheelchair.id, "missing")}
+        >
+          🔴 Eksik
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="text-xs"
+          onClick={() => onLocationChange(wheelchair.id)}
+        >
+          📍 Konum Ata
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="text-xs"
+          onClick={() => onNoteChange(wheelchair.id)}
+        >
+          📝 Not Ekle
+        </Button>
       </div>
     </div>
   );

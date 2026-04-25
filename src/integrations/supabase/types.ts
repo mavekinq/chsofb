@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      airline_terminal_rules: {
+        Row: {
+          airline_code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          note: string | null
+          terminal_code: string
+          updated_at: string
+        }
+        Insert: {
+          airline_code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          note?: string | null
+          terminal_code: string
+          updated_at?: string
+        }
+        Update: {
+          airline_code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          note?: string | null
+          terminal_code?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       action_logs: {
         Row: {
           action: string
@@ -68,11 +98,81 @@ export type Database = {
         }
         Relationships: []
       }
+      push_subscriptions: {
+        Row: {
+          created_at: string
+          endpoint: string
+          is_active: boolean
+          last_seen_at: string
+          subscription: Json
+          updated_at: string
+          user_agent: string | null
+          user_name: string
+        }
+        Insert: {
+          created_at?: string
+          endpoint: string
+          is_active?: boolean
+          last_seen_at?: string
+          subscription: Json
+          updated_at?: string
+          user_agent?: string | null
+          user_name?: string
+        }
+        Update: {
+          created_at?: string
+          endpoint?: string
+          is_active?: boolean
+          last_seen_at?: string
+          subscription?: Json
+          updated_at?: string
+          user_agent?: string | null
+          user_name?: string
+        }
+        Relationships: []
+      }
+      wheelchair_services: {
+        Row: {
+          assigned_staff: string
+          created_at: string
+          created_by: string
+          flight_iata: string
+          id: string
+          notes: string
+          passenger_type: string
+          terminal: string
+          wheelchair_id: string
+        }
+        Insert: {
+          assigned_staff?: string
+          created_at?: string
+          created_by?: string
+          flight_iata: string
+          id?: string
+          notes?: string
+          passenger_type: string
+          terminal?: string
+          wheelchair_id: string
+        }
+        Update: {
+          assigned_staff?: string
+          created_at?: string
+          created_by?: string
+          flight_iata?: string
+          id?: string
+          notes?: string
+          passenger_type?: string
+          terminal?: string
+          wheelchair_id?: string
+        }
+        Relationships: []
+      }
       wheelchairs: {
         Row: {
           created_at: string
           gate: string
           id: string
+          note: string | null
           status: string
           terminal: string
           updated_at: string
@@ -82,6 +182,7 @@ export type Database = {
           created_at?: string
           gate?: string
           id?: string
+          note?: string | null
           status?: string
           terminal?: string
           updated_at?: string
@@ -91,10 +192,41 @@ export type Database = {
           created_at?: string
           gate?: string
           id?: string
+          note?: string | null
           status?: string
           terminal?: string
           updated_at?: string
           wheelchair_id?: string
+        }
+        Relationships: []
+      }
+      users: {
+        Row: {
+          created_at: string
+          full_name: string
+          id: string
+          is_admin: boolean
+          notification_enabled: boolean
+          security_number: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          full_name: string
+          id?: string
+          is_admin?: boolean
+          notification_enabled?: boolean
+          security_number?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string
+          id?: string
+          is_admin?: boolean
+          notification_enabled?: boolean
+          security_number?: string | null
+          updated_at?: string
         }
         Relationships: []
       }

@@ -4,6 +4,7 @@ import { Search, Plane, ArrowLeft, Clock, MapPin, AlertTriangle } from "lucide-r
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { fetchFlightPlanEntries, type FlightPlanEntry } from "@/lib/flight-plan";
 import {
   Table,
   TableBody,
@@ -13,71 +14,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-interface Flight {
-  arrivalCode: string;
-  departureCode: string;
-  aircraftType: string;
-  tailNumber: string;
-  arrivalTime: string;
-  departureTime: string;
-  arrivalIATA: string;
-  departureIATA: string;
-  parkPosition: string;
-  specialNotes: string;
-}
-
-const SHEET_URL =
-  "https://docs.google.com/spreadsheets/d/1-UVsf1_jZ_n_CPGqieMMWgMpbVnzzchuvexrseNUSqg/export?format=csv";
-
-const parseCSVLine = (line: string): string[] => {
-  const result: string[] = [];
-  let current = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      inQuotes = !inQuotes;
-    } else if (ch === "," && !inQuotes) {
-      result.push(current.trim());
-      current = "";
-    } else {
-      current += ch;
-    }
-  }
-  result.push(current.trim());
-  return result;
-};
-
 const FlightsPage = () => {
   const navigate = useNavigate();
-  const [flights, setFlights] = useState<Flight[]>([]);
+  const [flights, setFlights] = useState<FlightPlanEntry[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchFlights = async () => {
       try {
-        const res = await fetch(SHEET_URL);
-        const text = await res.text();
-        const lines = text.split("\n").filter(Boolean);
-        if (lines.length < 2) return;
-
-        const data: Flight[] = lines.slice(3).map((line) => {
-          const cols = parseCSVLine(line);
-          return {
-            arrivalCode: cols[1] || "",
-            departureCode: cols[2] || "",
-            aircraftType: cols[3] || "",
-            tailNumber: cols[4] || "",
-            arrivalTime: cols[5] || "",
-            departureTime: cols[6] || "",
-            arrivalIATA: cols[7] || "",
-            departureIATA: cols[8] || "",
-            parkPosition: cols[9] || "",
-            specialNotes: cols[11] || "",
-          };
-        });
-        setFlights(data.filter((f) => f.arrivalCode || f.departureCode));
+        const data = await fetchFlightPlanEntries();
+        setFlights(data);
       } catch (e) {
         console.error("Flight data fetch failed:", e);
       } finally {

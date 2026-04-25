@@ -17,30 +17,34 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const GATES = [
-  "Gate 1", "Gate 2", "Gate 3", "Gate 4", "Gate 5",
-  "Gate 6", "Gate 7", "Gate 8", "Gate 9", "Gate 10",
-  "Gate 11", "Gate 12", "Gate 13", "Gate 14", "Gate 15",
-  "Giriş", "Çıkış", "Bagaj", "Check-in",
+const LOCATIONS = [
+  "İç Hat Merdiven Altı",
+  "İç Hat Gate",
+  "İç Hat Arrival",
+  "T2 Ofis",
+  "T2 Gate",
+  "T2 Arrival",
+  "Ambulift",
+  "Merkez",
 ];
 
 interface LocationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (gate: string) => void;
+  onConfirm: (location: string) => void;
 }
 
 const LocationDialog = ({ open, onOpenChange, onConfirm }: LocationDialogProps) => {
   const [mode, setMode] = useState<"select" | "manual">("select");
-  const [gate, setGate] = useState("");
-  const [manualGate, setManualGate] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState("");
+  const [manualLocation, setManualLocation] = useState("");
 
   const handleConfirm = () => {
-    const value = mode === "select" ? gate : manualGate.trim();
+    const value = mode === "select" ? selectedLocation : manualLocation.trim();
     if (!value) return;
     onConfirm(value);
-    setGate("");
-    setManualGate("");
+    setSelectedLocation("");
+    setManualLocation("");
     onOpenChange(false);
   };
 
@@ -57,7 +61,7 @@ const LocationDialog = ({ open, onOpenChange, onConfirm }: LocationDialogProps) 
               size="sm"
               onClick={() => setMode("select")}
             >
-              Gate Seç
+              Lokasyon Seç
             </Button>
             <Button
               variant={mode === "manual" ? "default" : "outline"}
@@ -70,14 +74,14 @@ const LocationDialog = ({ open, onOpenChange, onConfirm }: LocationDialogProps) 
 
           {mode === "select" ? (
             <div className="space-y-2">
-              <Label>Gate</Label>
-              <Select value={gate} onValueChange={setGate}>
+              <Label>Lokasyon</Label>
+              <Select value={selectedLocation} onValueChange={setSelectedLocation}>
                 <SelectTrigger className="bg-secondary border-border">
-                  <SelectValue placeholder="Gate seçin..." />
+                  <SelectValue placeholder="Lokasyon seçin..." />
                 </SelectTrigger>
                 <SelectContent className="bg-popover border-border">
-                  {GATES.map((g) => (
-                    <SelectItem key={g} value={g}>{g}</SelectItem>
+                  {LOCATIONS.map((location) => (
+                    <SelectItem key={location} value={location}>{location}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -86,9 +90,9 @@ const LocationDialog = ({ open, onOpenChange, onConfirm }: LocationDialogProps) 
             <div className="space-y-2">
               <Label>Konum</Label>
               <Input
-                value={manualGate}
-                onChange={(e) => setManualGate(e.target.value)}
-                placeholder="Konum yazın..."
+                value={manualLocation}
+                onChange={(e) => setManualLocation(e.target.value)}
+                placeholder="Lokasyon yazın..."
                 className="bg-secondary border-border"
               />
             </div>

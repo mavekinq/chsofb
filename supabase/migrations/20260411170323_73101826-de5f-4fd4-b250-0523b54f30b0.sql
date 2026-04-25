@@ -25,6 +25,7 @@ CREATE TABLE public.shifts (
   staff_name TEXT NOT NULL,
   started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   ended_at TIMESTAMP WITH TIME ZONE,
+  terminal TEXT NOT NULL DEFAULT 'İç Hat' CHECK (terminal IN ('İç Hat', 'Dış Hat')),
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plane, Users, Filter, Clock, Accessibility, PackagePlus } from "lucide-react";
+import { Plane, Users, Filter, Clock, Accessibility, PackagePlus, Phone, LogOut, Menu, X, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -10,10 +11,23 @@ import SplashScreen from "@/components/SplashScreen";
 import WheelchairCard, { Wheelchair, WheelchairStatus } from "@/components/WheelchairCard";
 import ShiftDialog from "@/components/ShiftDialog";
 import LocationDialog from "@/components/LocationDialog";
+import NoteDialog from "../components/NoteDialog";
 import HistoryLog from "@/components/HistoryLog";
 import WheelchairManageDialog from "@/components/WheelchairManageDialog";
 
 const TERMINALS = ["İç Hat", "T1", "T2"];
+
+// Helper function to get current user name
+const getCurrentUser = (): string => {
+  return localStorage.getItem("userName") || "Bilinmiyor";
+};
+
+// Helper function to logout
+const handleLogout = () => {
+  localStorage.removeItem("userName");
+  localStorage.removeItem("userRole");
+  window.location.href = "/login";
+};
 
 const Index = () => {
   const navigate = useNavigate();
@@ -21,11 +35,27 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState("İç Hat");
   const [showShift, setShowShift] = useState(false);
   const [showLocation, setShowLocation] = useState(false);
+  const [showNote, setShowNote] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showManage, setShowManage] = useState(false);
   const [missingOnly, setMissingOnly] = useState(false);
   const [wheelchairs, setWheelchairs] = useState<Wheelchair[]>([]);
   const [selectedChairId, setSelectedChairId] = useState<string | null>(null);
+  const [selectedNoteChairId, setSelectedNoteChairId] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const [currentUser, setCurrentUser] = useState<string>("");
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Check if user is logged in on mount
+  useEffect(() => {
+    const user = localStorage.getItem("userName");
+    if (!user) {
+      navigate("/login");
+    } else {
+      setCurrentUser(user);
+    }
+  }, [navigate]);
 
   useEffect(() => {
     const timer = setTimeout(() => setSplash(false), 2800);
@@ -57,11 +87,12 @@ const Index = () => {
     if (!chair) return;
     const { error } = await supabase.from("wheelchairs").update({ status }).eq("id", id);
     if (error) { toast.error("Durum güncellenemedi"); return; }
+    setWheelchairs((prev) => prev.map((w) => (w.id === id ? { ...w, status } : w)));
     await supabase.from("action_logs").insert({
       wheelchair_id: chair.wheelchair_id,
       action: "Durum Değişikliği",
       details: `${status}`,
-      performed_by: "Personel",
+      performed_by: currentUser,
     });
     toast.success(`${chair.wheelchair_id} durumu güncellendi`);
   };
@@ -77,20 +108,58 @@ const Index = () => {
     if (!chair) return;
     const { error } = await supabase.from("wheelchairs").update({ gate }).eq("id", selectedChairId);
     if (error) { toast.error("Konum güncellenemedi"); return; }
+    setWheelchairs((prev) => prev.map((w) => (w.id === selectedChairId ? { ...w, gate } : w)));
     await supabase.from("action_logs").insert({
       wheelchair_id: chair.wheelchair_id,
       action: "Konum Değişikliği",
       details: `→ ${gate}`,
-      performed_by: "Personel",
+      performed_by: currentUser,
     });
     toast.success(`${chair.wheelchair_id} konumu güncellendi`);
     setSelectedChairId(null);
   };
 
+  const handleNoteChange = (id: string) => {
+    const chair = wheelchairs.find((w) => w.id === id);
+    if (!chair) return;
+    setSelectedNoteChairId(id);
+    setNoteText(chair.note ?? "");
+    setShowNote(true);
+  };
+
+  const handleNoteConfirm = async (note: string) => {
+    if (!selectedNoteChairId) return;
+    const chair = wheelchairs.find((w) => w.id === selectedNoteChairId);
+    if (!chair) return;
+    const { error } = await supabase.from("wheelchairs").update({ note }).eq("id", selectedNoteChairId);
+    if (error) {
+      console.error("Note save error:", error);
+      toast.error("Not kaydedilemedi: " + (error.message || JSON.stringify(error)));
+      return;
+    }
+    setWheelchairs((prev) => prev.map((w) => (w.id === selectedNoteChairId ? { ...w, note } : w)));
+    await supabase.from("action_logs").insert({
+      wheelchair_id: chair.wheelchair_id,
+      action: "Not Güncellendi",
+      details: note || "Not silindi",
+      performed_by: currentUser,
+    });
+    toast.success(`${chair.wheelchair_id} notu güncellendi`);
+    setSelectedNoteChairId(null);
+    setNoteText("");
+    setShowNote(false);
+  };
+
   const filtered = wheelchairs.filter((w) => {
+    const query = searchQuery.trim().toLocaleLowerCase("tr");
     const terminalMatch = w.terminal === activeTab;
     const statusMatch = missingOnly ? w.status === "missing" : true;
-    return terminalMatch && statusMatch;
+    const searchMatch =
+      !query ||
+      w.wheelchair_id.toLocaleLowerCase("tr").includes(query) ||
+      (w.gate || "").toLocaleLowerCase("tr").includes(query) ||
+      (w.note || "").toLocaleLowerCase("tr").includes(query);
+    return terminalMatch && statusMatch && searchMatch;
   });
 
   const counts = {
@@ -110,27 +179,108 @@ const Index = () => {
             <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
               <Accessibility className="w-4 h-4 text-primary" />
             </div>
-            <h1 className="font-heading font-bold text-lg hidden sm:block">Tekerlekli Sandalye Takip</h1>
+            <h1 className="font-heading font-bold text-lg">Tekerlekli Sandalye Takip</h1>
           </div>
-          <div className="flex items-center gap-2">
+
+          {/* Masaüstü menü */}
+          <div className="hidden md:flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate("/flights")} className="gap-1.5">
               <Plane className="w-4 h-4" />
-              <span className="hidden sm:inline">Uçuşlar</span>
+              Uçuşlar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open("https://docs.google.com/forms/d/e/1FAIpQLSfUTbfp60Z8zg-tmYMFvTbgWMhMgz1RaID8xJZOH__Xal9XVA/viewform?usp=header", "_blank")}
+              className="gap-1.5"
+            >
+              <Phone className="w-4 h-4" />
+              Telsiz Takip
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/wheelchair-services")} className="gap-1.5">
+              <Users className="w-4 h-4" />
+              Hizmetler
             </Button>
             <Button variant="outline" size="sm" onClick={() => setShowShift(true)} className="gap-1.5">
               <Users className="w-4 h-4" />
-              <span className="hidden sm:inline">Vardiya</span>
+              Vardiya
             </Button>
             <Button variant="outline" size="sm" onClick={() => setShowHistory(!showHistory)} className="gap-1.5">
               <Clock className="w-4 h-4" />
-              <span className="hidden sm:inline">Geçmiş</span>
+              Geçmiş
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/work-schedule")} className="gap-1.5">
+              <CalendarDays className="w-4 h-4" />
+              Calisma Programi
             </Button>
             <Button variant="outline" size="sm" onClick={() => setShowManage(true)} className="gap-1.5">
               <PackagePlus className="w-4 h-4" />
-              <span className="hidden sm:inline">Envanter</span>
+              Envanter
+            </Button>
+            <div className="border-l border-border pl-2 ml-2 flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{currentUser}</span>
+              <Button variant="ghost" size="sm" onClick={handleLogout} title="Çıkış Yap">
+                <LogOut className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Mobil hamburger butonu */}
+          <div className="flex md:hidden items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={handleLogout} title="Çıkış Yap">
+              <LogOut className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+            >
+              {showMobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </Button>
           </div>
         </div>
+
+        {/* Mobil açılır menü */}
+        {showMobileMenu && (
+          <div className="md:hidden border-t border-border bg-card px-4 py-3 flex flex-col gap-2">
+            <Button variant="ghost" size="sm" onClick={() => { navigate("/flights"); setShowMobileMenu(false); }} className="justify-start gap-2">
+              <Plane className="w-4 h-4" />
+              Uçuşlar
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { window.open("https://docs.google.com/forms/d/e/1FAIpQLSfUTbfp60Z8zg-tmYMFvTbgWMhMgz1RaID8xJZOH__Xal9XVA/viewform?usp=header", "_blank"); setShowMobileMenu(false); }}
+              className="justify-start gap-2"
+            >
+              <Phone className="w-4 h-4" />
+              Telsiz Takip
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => { navigate("/wheelchair-services"); setShowMobileMenu(false); }} className="justify-start gap-2">
+              <Users className="w-4 h-4" />
+              Hizmetler
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => { setShowShift(true); setShowMobileMenu(false); }} className="justify-start gap-2">
+              <Users className="w-4 h-4" />
+              Vardiya
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => { setShowHistory(!showHistory); setShowMobileMenu(false); }} className="justify-start gap-2">
+              <Clock className="w-4 h-4" />
+              Geçmiş
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => { navigate("/work-schedule"); setShowMobileMenu(false); }} className="justify-start gap-2">
+              <CalendarDays className="w-4 h-4" />
+              Calisma Programi
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => { setShowManage(true); setShowMobileMenu(false); }} className="justify-start gap-2">
+              <PackagePlus className="w-4 h-4" />
+              Envanter
+            </Button>
+            <div className="border-t border-border pt-2 mt-1">
+              <span className="text-sm text-muted-foreground px-2">{currentUser}</span>
+            </div>
+          </div>
+        )}
       </header>
 
       <main className="container px-4 py-6">
@@ -152,15 +302,23 @@ const Index = () => {
                     </TabsTrigger>
                   ))}
                 </TabsList>
-                <Button
-                  variant={missingOnly ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setMissingOnly(!missingOnly)}
-                  className="gap-1.5"
-                >
-                  <Filter className="w-4 h-4" />
-                  Sadece Eksikleri Göster
-                </Button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Sandalye ara (ID, konum, not)"
+                    className="w-[240px] bg-secondary border-border"
+                  />
+                  <Button
+                    variant={missingOnly ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setMissingOnly(!missingOnly)}
+                    className="gap-1.5"
+                  >
+                    <Filter className="w-4 h-4" />
+                    Sadece Eksikleri Göster
+                  </Button>
+                </div>
               </div>
 
               {/* Stats */}
@@ -194,6 +352,7 @@ const Index = () => {
                           wheelchair={w}
                           onStatusChange={handleStatusChange}
                           onLocationChange={handleLocationChange}
+                          onNoteChange={handleNoteChange}
                         />
                       ))}
                     </div>
@@ -205,8 +364,14 @@ const Index = () => {
         )}
       </main>
 
-      <ShiftDialog open={showShift} onOpenChange={setShowShift} />
+      <ShiftDialog open={showShift} onOpenChange={setShowShift} wheelchairs={wheelchairs} />
       <LocationDialog open={showLocation} onOpenChange={setShowLocation} onConfirm={handleLocationConfirm} />
+      <NoteDialog
+        open={showNote}
+        onOpenChange={setShowNote}
+        initialNote={noteText}
+        onConfirm={handleNoteConfirm}
+      />
       <WheelchairManageDialog open={showManage} onOpenChange={setShowManage} wheelchairs={wheelchairs} />
     </div>
   );

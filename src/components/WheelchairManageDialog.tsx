@@ -63,11 +63,11 @@ const WheelchairManageDialog = ({ open, onOpenChange, wheelchairs }: WheelchairM
       if (error) throw error;
       await supabase.from("action_logs").insert({
         wheelchair_id: wheelchairId.trim(),
-        action: "Envantere Eklendi",
+        action: "Envantore Eklendi",
         details: `Terminal: ${terminal}${gate ? `, Konum: ${gate}` : ""}`,
         performed_by: "Personel",
       });
-      toast.success(`${wheelchairId} envantere eklendi`);
+      toast.success(`${wheelchairId} envantore eklendi`);
       setWheelchairId("");
       setGate("");
     } catch (e: any) {
