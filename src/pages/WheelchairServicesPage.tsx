@@ -98,6 +98,15 @@ const parseDepartureTimestamp = (value: string) => {
   return Math.floor(parsed.getTime() / 1000);
 };
 
+const normalizeGateValue = (value?: string | null) => {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (!normalized || normalized === "0" || normalized === "00" || normalized === "-") {
+    return null;
+  }
+
+  return normalized;
+};
+
 const getTerminalFromDestination = (destinationIata?: string | null) => {
   const normalized = String(destinationIata || "").trim().toUpperCase();
   return DOMESTIC_AIRPORT_CODES.has(normalized) ? "T1" : "T2";
@@ -108,7 +117,10 @@ const getDisplayGate = (flight?: Pick<Flight, "plannedPosition" | "dep_gate" | "
     return "-";
   }
 
-  return flight.plannedPosition || flight.parkPosition || flight.dep_gate || "-";
+  return normalizeGateValue(flight.plannedPosition)
+    || normalizeGateValue(flight.parkPosition)
+    || normalizeGateValue(flight.dep_gate)
+    || "-";
 };
 
 const WheelchairServicesPage = () => {
@@ -160,7 +172,7 @@ const WheelchairServicesPage = () => {
             parkPosition: entry.parkPosition || undefined,
             status: entry.specialNotes ? "noted" : "scheduled",
             duration: 0,
-            delayed: 0,
+            delayed: undefined,
           } satisfies Flight;
         })
         .filter((flight) => flight.dep_time_ts > 0);
@@ -353,6 +365,7 @@ const WheelchairServicesPage = () => {
     const now = Date.now() / 1000;
     const diff = timestamp - now;
     if (diff <= 0) return "Geçti";
+    if (diff < 60) return "<1dk";
 
     const hours = Math.floor(diff / 3600);
     const minutes = Math.floor((diff % 3600) / 60);
