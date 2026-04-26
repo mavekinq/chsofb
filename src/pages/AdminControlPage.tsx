@@ -15,7 +15,6 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { getBriefings, hasCustomBriefings, resetBriefings, saveBriefings } from "@/lib/briefings";
 import { fetchFlightPlanEntries, getFlightCodeMatchKeys, normalizeFlightCode, type FlightPlanEntry } from "@/lib/flight-plan";
-import { fetchAirlineTerminalRules, getDefaultAirlineTerminalRules, isAirlineTerminalRulesTableMissing, readStoredAirlineTerminalRules, saveStoredAirlineTerminalRules, type AirlineTerminalRule, type AirlineTerminalRulesSource } from "@/lib/flight-rules";
 import { triggerGoogleSheetsSync } from "@/lib/google-sheets-sync";
 import { extractAssignedStaffFromService, getVisibleServiceNotes } from "@/lib/wheelchair-service-utils";
 import {
@@ -147,14 +146,6 @@ const AdminControlPage = () => {
   const [todayServices, setTodayServices] = useState<ServiceRow[]>([]);
   const [serviceTrendRows, setServiceTrendRows] = useState<ServiceTrendRow[]>([]);
   const [handoverTrendLogs, setHandoverTrendLogs] = useState<HandoverTrendRow[]>([]);
-  const [airlineTerminalRules, setAirlineTerminalRules] = useState<AirlineTerminalRule[]>(() => getDefaultAirlineTerminalRules());
-  const [airlineTerminalRulesSource, setAirlineTerminalRulesSource] = useState<AirlineTerminalRulesSource>("fallback");
-  const [newRuleAirlineCode, setNewRuleAirlineCode] = useState("");
-  const [newRuleTerminalCode, setNewRuleTerminalCode] = useState<"T1" | "T2">("T2");
-  const [newRuleNote, setNewRuleNote] = useState("");
-  const [savingRule, setSavingRule] = useState(false);
-  const [updatingRuleCode, setUpdatingRuleCode] = useState<string | null>(null);
-  const [deletingRuleCode, setDeletingRuleCode] = useState<string | null>(null);
   const [pushSubscriptions, setPushSubscriptions] = useState<PushSubscriptionRow[]>([]);
   const [schedulePayload, setSchedulePayload] = useState<SchedulePayload>(() => getStoredSchedulePayload());
   const [hasCustomSchedule, setHasCustomSchedule] = useState(() => hasStoredSchedulePayload());
@@ -448,15 +439,6 @@ const AdminControlPage = () => {
       });
     }
 
-    if (airlineTerminalRulesSource !== "database") {
-      alerts.push({
-        id: "rules-not-database",
-        level: "info",
-        title: "Firma-terminal kurallari veritabanindan okunmuyor",
-        detail: "Kurallar su an yerel/fallback kaynaktan geliyor; canli tablolari kontrol edin.",
-      });
-    }
-
     if (alerts.length === 0) {
       alerts.push({
         id: "all-good",
@@ -467,7 +449,7 @@ const AdminControlPage = () => {
     }
 
     return alerts;
-  }, [activeShiftRows.length, airlineTerminalRulesSource, maintenanceWheelchairs.length, missingWheelchairs.length, now, summary.activeShifts, summary.onShiftSubscribers, todayServices.length]);
+  }, [activeShiftRows.length, maintenanceWheelchairs.length, missingWheelchairs.length, now, summary.activeShifts, summary.onShiftSubscribers, todayServices.length]);
 
   const logActionOptions = useMemo(
     () => Array.from(new Set(recentLogs.map((log) => log.action))).sort((left, right) => left.localeCompare(right, "tr")),
@@ -813,16 +795,6 @@ const AdminControlPage = () => {
   useEffect(() => {
     let cancelled = false;
 
-    const fetchRuleSummary = async () => {
-      const result = await fetchAirlineTerminalRules();
-      if (cancelled) {
-        return;
-      }
-
-      setAirlineTerminalRules(result.rules);
-      setAirlineTerminalRulesSource(result.source);
-    };
-
     const fetchSummary = async (silent = false) => {
       const [
         { data: wheelchairs, error: wheelchairError },
@@ -883,7 +855,6 @@ const AdminControlPage = () => {
     };
 
     void fetchSummary();
-    void fetchRuleSummary();
 
     const serviceChannel = supabase
       .channel("admin-summary-services")
@@ -920,13 +891,6 @@ const AdminControlPage = () => {
       })
       .subscribe();
 
-    const rulesChannel = supabase
-      .channel("admin-summary-airline-rules")
-      .on("postgres_changes", { event: "*", schema: "public", table: "airline_terminal_rules" }, () => {
-        void fetchRuleSummary();
-      })
-      .subscribe();
-
     return () => {
       cancelled = true;
       void supabase.removeChannel(serviceChannel);
@@ -934,7 +898,6 @@ const AdminControlPage = () => {
       void supabase.removeChannel(wheelchairsChannel);
       void supabase.removeChannel(logsChannel);
       void supabase.removeChannel(pushChannel);
-      void supabase.removeChannel(rulesChannel);
     };
   }, [todayStartIso, trendStartIso]);
 
@@ -1079,121 +1042,6 @@ const AdminControlPage = () => {
       toast.error("Log kaydi silinemedi");
     } finally {
       setDeletingLogId(null);
-    }
-  };
-
-  const refreshAirlineTerminalRules = async () => {
-    const result = await fetchAirlineTerminalRules();
-    setAirlineTerminalRules(result.rules);
-    setAirlineTerminalRulesSource(result.source);
-  };
-
-  const handleAddAirlineTerminalRule = async () => {
-    const airlineCode = newRuleAirlineCode.trim().toUpperCase();
-    if (!/^[A-Z0-9]{2}$/.test(airlineCode)) {
-      toast.error("Firma kodu 2 karakterli olmali (or: PC, B2)");
-      return;
-    }
-
-    setSavingRule(true);
-    try {
-      const { error } = await supabase
-        .from("airline_terminal_rules")
-        .upsert({
-          airline_code: airlineCode,
-          terminal_code: newRuleTerminalCode,
-          note: newRuleNote.trim() || null,
-          is_active: true,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "airline_code" });
-
-      if (error) {
-        if (isAirlineTerminalRulesTableMissing(error)) {
-          const existingRules = readStoredAirlineTerminalRules();
-          const nextRules = [
-            ...existingRules.filter((rule) => rule.airline_code !== airlineCode),
-            { airline_code: airlineCode, terminal_code: newRuleTerminalCode, note: newRuleNote.trim() || null, is_active: true },
-          ].sort((left, right) => left.airline_code.localeCompare(right.airline_code, "tr"));
-          saveStoredAirlineTerminalRules(nextRules);
-          await refreshAirlineTerminalRules();
-          toast.success(`${airlineCode} kurali cihazda kaydedildi`);
-          setNewRuleAirlineCode("");
-          setNewRuleNote("");
-          return;
-        }
-        throw error;
-      }
-
-      toast.success(`${airlineCode} kurali kaydedildi`);
-      setNewRuleAirlineCode("");
-      setNewRuleNote("");
-      await refreshAirlineTerminalRules();
-    } catch {
-      toast.error("Firma kurali kaydedilemedi");
-    } finally {
-      setSavingRule(false);
-    }
-  };
-
-  const handleUpdateRuleTerminal = async (airlineCode: string, terminalCode: "T1" | "T2") => {
-    setUpdatingRuleCode(airlineCode);
-    try {
-      const { error } = await supabase
-        .from("airline_terminal_rules")
-        .update({
-          terminal_code: terminalCode,
-          is_active: true,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("airline_code", airlineCode);
-
-      if (error) {
-        if (isAirlineTerminalRulesTableMissing(error)) {
-          const nextRules = readStoredAirlineTerminalRules().map((rule) =>
-            rule.airline_code === airlineCode ? { ...rule, terminal_code: terminalCode, is_active: true } : rule,
-          );
-          saveStoredAirlineTerminalRules(nextRules);
-          await refreshAirlineTerminalRules();
-          toast.success(`${airlineCode} terminali ${terminalCode} olarak cihazda guncellendi`);
-          return;
-        }
-        throw error;
-      }
-
-      toast.success(`${airlineCode} terminali ${terminalCode} olarak guncellendi`);
-      await refreshAirlineTerminalRules();
-    } catch {
-      toast.error("Terminal kurali guncellenemedi");
-    } finally {
-      setUpdatingRuleCode(null);
-    }
-  };
-
-  const handleDeleteRule = async (airlineCode: string) => {
-    setDeletingRuleCode(airlineCode);
-    try {
-      const { error } = await supabase
-        .from("airline_terminal_rules")
-        .delete()
-        .eq("airline_code", airlineCode);
-
-      if (error) {
-        if (isAirlineTerminalRulesTableMissing(error)) {
-          const nextRules = readStoredAirlineTerminalRules().filter((rule) => rule.airline_code !== airlineCode);
-          saveStoredAirlineTerminalRules(nextRules.length > 0 ? nextRules : getDefaultAirlineTerminalRules());
-          await refreshAirlineTerminalRules();
-          toast.success(`${airlineCode} kurali cihazdan kaldirildi`);
-          return;
-        }
-        throw error;
-      }
-
-      toast.success(`${airlineCode} kurali kaldirildi`);
-      await refreshAirlineTerminalRules();
-    } catch {
-      toast.error("Kural silinemedi");
-    } finally {
-      setDeletingRuleCode(null);
     }
   };
 
@@ -1744,106 +1592,6 @@ const AdminControlPage = () => {
             </CardContent>
               </Card>
 
-              <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Plane className="w-4 h-4 text-primary" />
-                Firma - Terminal Kurallari
-              </CardTitle>
-              <CardDescription>Hizmetler ekraninda kullanilan aktif havayolu terminal eslesmeleri.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Alert>
-                <Plane className="h-4 w-4" />
-                <AlertTitle>
-                  {airlineTerminalRulesSource === "database"
-                    ? "Supabase kurallari aktif"
-                    : airlineTerminalRulesSource === "local"
-                      ? "Cihazdaki yerel kurallar aktif"
-                      : "Varsayilan fallback kurallari aktif"}
-                </AlertTitle>
-                <AlertDescription>
-                  {airlineTerminalRulesSource === "database"
-                    ? "Degisiklikler Hizmetler ekrani ve admin gorunumu tarafina anlik yansir."
-                    : airlineTerminalRulesSource === "local"
-                      ? "airline_terminal_rules tablosu canli Supabase'te olmadigi icin ekle/guncelle/sil islemleri bu cihazin tarayicisinda saklaniyor."
-                      : "Tablo okunamazsa kod icindeki varsayilan eslesmeler kullanilir."}
-                </AlertDescription>
-              </Alert>
-
-              <div className="rounded-xl border border-border bg-background/60 p-3 space-y-3">
-                <p className="text-sm font-medium">Yeni Firma Kurali Ekle</p>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <Input
-                    value={newRuleAirlineCode}
-                    onChange={(event) => setNewRuleAirlineCode(event.target.value.toUpperCase())}
-                    maxLength={2}
-                    placeholder="Kod (B2)"
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant={newRuleTerminalCode === "T1" ? "default" : "outline"}
-                      onClick={() => setNewRuleTerminalCode("T1")}
-                      className="flex-1"
-                    >
-                      T1
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={newRuleTerminalCode === "T2" ? "default" : "outline"}
-                      onClick={() => setNewRuleTerminalCode("T2")}
-                      className="flex-1"
-                    >
-                      T2
-                    </Button>
-                  </div>
-                  <Button type="button" onClick={handleAddAirlineTerminalRule} disabled={savingRule}>
-                    {savingRule ? "Kaydediliyor..." : "Ekle / Guncelle"}
-                  </Button>
-                </div>
-                <Input
-                  value={newRuleNote}
-                  onChange={(event) => setNewRuleNote(event.target.value)}
-                  placeholder="Opsiyonel not"
-                />
-              </div>
-
-              <div className="space-y-2">
-                {airlineTerminalRules.map((rule) => (
-                  <div key={rule.airline_code} className="rounded-xl border border-border bg-background/60 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium">{rule.airline_code}</p>
-                        <p className="text-xs text-muted-foreground">{rule.note || "Aciklama yok"}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={rule.terminal_code === "T1" ? "default" : "secondary"}>{rule.terminal_code}</Badge>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={updatingRuleCode === rule.airline_code}
-                          onClick={() => handleUpdateRuleTerminal(rule.airline_code, rule.terminal_code === "T1" ? "T2" : "T1")}
-                        >
-                          {updatingRuleCode === rule.airline_code ? "..." : "Degistir"}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          disabled={deletingRuleCode === rule.airline_code}
-                          onClick={() => handleDeleteRule(rule.airline_code)}
-                        >
-                          {deletingRuleCode === rule.airline_code ? "..." : "Sil"}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-              </Card>
             </div>
           </TabsContent>
 
