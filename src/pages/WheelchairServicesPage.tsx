@@ -116,8 +116,18 @@ const WheelchairServicesPage = () => {
   const [airlineTerminalRules, setAirlineTerminalRules] = useState<AirlineTerminalRule[]>(() => getDefaultAirlineTerminalRules());
   const sentPreFlightAlertsRef = useRef<Set<string>>(new Set());
 
-  const resolveFlightTerminal = (flight: Flight): ServiceTerminalCode | null =>
-    resolveServiceFlightTerminal(flight.airline_iata, flight.dep_terminal, airlineTerminalRules);
+  const resolveFlightTerminal = (flight: Flight): ServiceTerminalCode | null => {
+    const resolvedTerminal = resolveServiceFlightTerminal(flight.airline_iata, flight.dep_terminal, airlineTerminalRules);
+    if (resolvedTerminal) {
+      return resolvedTerminal;
+    }
+
+    const fallbackRule = airlineTerminalRules.find((rule) =>
+      rule.is_active && rule.airline_code.toUpperCase().trim() === flight.airline_iata,
+    );
+
+    return fallbackRule?.terminal_code || null;
+  };
 
   const fetchFlights = async (silent = false) => {
     if (!silent) {
