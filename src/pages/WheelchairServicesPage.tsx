@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
-import { createFlightPlanPositionLookup, fetchFlightPlanEntries, getFlightCodeMatchKeys, normalizeFlightCode } from "@/lib/flight-plan";
+import { fetchFlightPlanEntries, getFlightCodeMatchKeys, normalizeFlightCode } from "@/lib/flight-plan";
 import { fetchAirlineTerminalRules, getDefaultAirlineTerminalRules, resolveServiceFlightTerminal, type AirlineTerminalRule, type ServiceTerminalCode } from "@/lib/flight-rules";
 import { triggerServicePushNotification } from "@/lib/notifications";
 import { buildServiceNotesWithAssignedStaff, extractAssignedStaffFromService, getVisibleServiceNotes, isAssignedStaffSchemaCacheError } from "@/lib/wheelchair-service-utils";
@@ -65,6 +65,34 @@ const COUNTER_CLOSE_MINUTES: Record<(typeof TERMINALS)[number], number> = {
 };
 const PRE_FLIGHT_ALERT_WINDOW_MINUTES = 2;
 
+const extractAirlineCodeFromFlightCode = (value: string) => {
+  const match = normalizeFlightCode(value).match(/^[A-Z0-9]+?(?=\d|$)/);
+  return match?.[0] || "";
+};
+
+const extractFlightNumberFromFlightCode = (value: string) => {
+  const normalized = normalizeFlightCode(value);
+  const airlineCode = extractAirlineCodeFromFlightCode(normalized);
+  return normalized.slice(airlineCode.length);
+};
+
+const parseDepartureTimestamp = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return null;
+  }
+
+  const match = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) {
+    return null;
+  }
+
+  const now = new Date();
+  const parsed = new Date(now);
+  parsed.setHours(Number(match[1]), Number(match[2]), Number(match[3] || 0), 0);
+  return Math.floor(parsed.getTime() / 1000);
+};
+
 const getDisplayGate = (flight?: Pick<Flight, "plannedPosition" | "dep_gate" | "parkPosition"> | null) => {
   if (!flight) {
     return "-";
@@ -98,55 +126,39 @@ const WheelchairServicesPage = () => {
 
     try {
       const flightPlanEntries = await fetchFlightPlanEntries();
-      const parkPositionMap = createFlightPlanPositionLookup(flightPlanEntries);
-
-      const response = await fetch("https://airlabs.co/api/v9/schedules", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: new URLSearchParams({
-          api_key: "f37c1fc5-514a-4309-bcc3-b79f270d1711",
-          dep_iata: "AYT"
-        })
-      });
-      const data = await response.json();
       const now = Date.now() / 1000;
 
-      const mappedFlights = (data.response || [])
-        .filter((flight: any) => (
-          flight.dep_iata === "AYT" &&
-          !["cancelled", "diverted", "landed", "departed"].includes(flight.status)
-        ))
-        .map((flight: any) => {
-          const flightCodeCandidates = [
-            ...getFlightCodeMatchKeys(flight.flight_iata || ""),
-            ...getFlightCodeMatchKeys(`${flight.airline_iata || ""}${flight.flight_number || ""}`),
-            ...getFlightCodeMatchKeys(flight.flight_number || ""),
-          ];
-          const matchedParkPosition = flightCodeCandidates
-            .map((key) => parkPositionMap.get(key))
-            .find(Boolean);
+      const mappedFlights = flightPlanEntries
+        .filter((entry) => Boolean(entry.departureCode))
+        .map((entry) => {
+          const flightCode = normalizeFlightCode(entry.departureCode || "");
+          const airlineCode = extractAirlineCodeFromFlightCode(flightCode);
+          const flightNumber = extractFlightNumberFromFlightCode(flightCode);
+          const departureTimestamp = parseDepartureTimestamp(entry.departureTime);
+          const matchedRule = airlineTerminalRules.find((rule) =>
+            rule.is_active && rule.airline_code.toUpperCase().trim() === airlineCode,
+          );
 
           return {
-            airline_iata: flight.airline_iata,
-            flight_iata: normalizeFlightCode(flight.flight_iata || `${flight.airline_iata || ""}${flight.flight_number || ""}`),
-            flight_number: flight.flight_number,
-            dep_iata: flight.dep_iata,
-            dep_terminal: flight.dep_terminal,
-            dep_gate: flight.dep_gate,
-            dep_time: flight.dep_time,
-            dep_time_ts: flight.dep_time_ts,
-            dep_estimated: flight.dep_estimated,
-            dep_estimated_ts: flight.dep_estimated_ts,
-            arr_iata: flight.arr_iata,
-            plannedPosition: matchedParkPosition,
-            parkPosition: matchedParkPosition,
-            status: flight.status,
-            duration: flight.duration,
-            delayed: flight.delayed,
+            airline_iata: airlineCode,
+            flight_iata: flightCode,
+            flight_number: flightNumber,
+            dep_iata: "AYT",
+            dep_terminal: matchedRule?.terminal_code || null,
+            dep_gate: entry.parkPosition || null,
+            dep_time: entry.departureTime || "",
+            dep_time_ts: departureTimestamp || 0,
+            dep_estimated: undefined,
+            dep_estimated_ts: undefined,
+            arr_iata: entry.departureIATA || "",
+            plannedPosition: entry.parkPosition || undefined,
+            parkPosition: entry.parkPosition || undefined,
+            status: entry.specialNotes ? "noted" : "scheduled",
+            duration: 0,
+            delayed: 0,
           } satisfies Flight;
-        });
+        })
+        .filter((flight) => flight.dep_time_ts > 0);
 
       const activeFlights = mappedFlights
         .filter((flight: Flight) => (flight.dep_estimated_ts || flight.dep_time_ts) > now)
