@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { fetchFlightPlanEntries, getFlightCodeMatchKeys, normalizeFlightCode } from "@/lib/flight-plan";
-import { fetchAirlineTerminalRules, getDefaultAirlineTerminalRules, resolveServiceFlightTerminal, type AirlineTerminalRule, type ServiceTerminalCode } from "@/lib/flight-rules";
 import { triggerServicePushNotification } from "@/lib/notifications";
 import { buildServiceNotesWithAssignedStaff, extractAssignedStaffFromService, getVisibleServiceNotes, isAssignedStaffSchemaCacheError } from "@/lib/wheelchair-service-utils";
 import { matchesWheelchairInventoryTerminal } from "@/lib/wheelchair-terminals";
@@ -64,6 +63,12 @@ const COUNTER_CLOSE_MINUTES: Record<(typeof TERMINALS)[number], number> = {
   T2: 60,
 };
 const PRE_FLIGHT_ALERT_WINDOW_MINUTES = 2;
+const DOMESTIC_AIRPORT_CODES = new Set([
+  "ADA", "ADB", "ADF", "AJI", "AOE", "ASR", "AYT", "BAL", "BDM", "BJV", "CKZ", "DIY", "DLM", "DNZ", "EDO", "EZS",
+  "ERC", "ERZ", "ESB", "GNY", "GZP", "GZT", "HTY", "IGD", "ISE", "IST", "IZM", "KCM", "KCO", "KSY", "KYA", "MLX",
+  "MQM", "MSR", "MZH", "NAV", "NOP", "OGU", "ONQ", "RIZ", "SAW", "SFQ", "SIC", "SZF", "TEQ", "TJK", "TZX", "USQ",
+  "VAN", "YEI", "YKO", "BXN",
+]);
 
 const extractAirlineCodeFromFlightCode = (value: string) => {
   const match = normalizeFlightCode(value).match(/^[A-Z0-9]+?(?=\d|$)/);
@@ -93,6 +98,11 @@ const parseDepartureTimestamp = (value: string) => {
   return Math.floor(parsed.getTime() / 1000);
 };
 
+const getTerminalFromDestination = (destinationIata?: string | null) => {
+  const normalized = String(destinationIata || "").trim().toUpperCase();
+  return DOMESTIC_AIRPORT_CODES.has(normalized) ? "T1" : "T2";
+};
+
 const getDisplayGate = (flight?: Pick<Flight, "plannedPosition" | "dep_gate" | "parkPosition"> | null) => {
   if (!flight) {
     return "-";
@@ -113,21 +123,9 @@ const WheelchairServicesPage = () => {
   const [wheelchairs, setWheelchairs] = useState<WheelchairInventory[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentUser, setCurrentUser] = useState("Personel");
-  const [airlineTerminalRules, setAirlineTerminalRules] = useState<AirlineTerminalRule[]>(() => getDefaultAirlineTerminalRules());
   const sentPreFlightAlertsRef = useRef<Set<string>>(new Set());
 
-  const resolveFlightTerminal = (flight: Flight): ServiceTerminalCode | null => {
-    const resolvedTerminal = resolveServiceFlightTerminal(flight.airline_iata, flight.dep_terminal, airlineTerminalRules);
-    if (resolvedTerminal) {
-      return resolvedTerminal;
-    }
-
-    const fallbackRule = airlineTerminalRules.find((rule) =>
-      rule.is_active && rule.airline_code.toUpperCase().trim() === flight.airline_iata,
-    );
-
-    return fallbackRule?.terminal_code || null;
-  };
+  const resolveFlightTerminal = (flight: Flight) => getTerminalFromDestination(flight.arr_iata);
 
   const fetchFlights = async (silent = false) => {
     if (!silent) {
@@ -145,16 +143,13 @@ const WheelchairServicesPage = () => {
           const airlineCode = extractAirlineCodeFromFlightCode(flightCode);
           const flightNumber = extractFlightNumberFromFlightCode(flightCode);
           const departureTimestamp = parseDepartureTimestamp(entry.departureTime);
-          const matchedRule = airlineTerminalRules.find((rule) =>
-            rule.is_active && rule.airline_code.toUpperCase().trim() === airlineCode,
-          );
 
           return {
             airline_iata: airlineCode,
             flight_iata: flightCode,
             flight_number: flightNumber,
             dep_iata: "AYT",
-            dep_terminal: matchedRule?.terminal_code || null,
+            dep_terminal: getTerminalFromDestination(entry.departureIATA),
             dep_gate: entry.parkPosition || null,
             dep_time: entry.departureTime || "",
             dep_time_ts: departureTimestamp || 0,
@@ -206,15 +201,6 @@ const WheelchairServicesPage = () => {
 
     if (data) {
       setWheelchairs(data as WheelchairInventory[]);
-    }
-  };
-
-  const fetchTerminalRules = async () => {
-    const result = await fetchAirlineTerminalRules();
-    setAirlineTerminalRules(result.rules);
-
-    if (result.source === "fallback") {
-      console.warn("Airline terminal rules fallback aktif", result.error);
     }
   };
 
@@ -306,7 +292,6 @@ const WheelchairServicesPage = () => {
     fetchFlights();
     fetchServices();
     fetchWheelchairs();
-    void fetchTerminalRules();
 
     const handleServiceRealtime = (payload: RealtimePostgresChangesPayload<WheelchairService>) => {
       if (payload.eventType === "INSERT") {
@@ -349,19 +334,11 @@ const WheelchairServicesPage = () => {
       })
       .subscribe();
 
-    const rulesChannel = supabase
-      .channel("airline_terminal_rules_realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "airline_terminal_rules" }, () => {
-        void fetchTerminalRules();
-      })
-      .subscribe();
-
     const interval = setInterval(() => fetchFlights(true), 60000);
     return () => {
       clearInterval(interval);
       supabase.removeChannel(servicesChannel);
       supabase.removeChannel(wheelchairsChannel);
-      supabase.removeChannel(rulesChannel);
     };
   }, []);
 
@@ -393,16 +370,7 @@ const WheelchairServicesPage = () => {
   };
 
   const getTerminalFlights = (terminal: string) => {
-    return flights.filter((flight) => {
-      const resolvedTerminal = resolveFlightTerminal(flight);
-      if (terminal === "T1") {
-        return resolvedTerminal === "T1";
-      }
-      if (terminal === "T2") {
-        return resolvedTerminal === "T2";
-      }
-      return false;
-    });
+    return flights.filter((flight) => resolveFlightTerminal(flight) === terminal);
   };
 
   const handleAddService = async (flight: Flight, wheelchairId: string, passengerType: string, notes: string, assignedStaff: string) => {
