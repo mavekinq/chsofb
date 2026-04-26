@@ -18,9 +18,29 @@ const DEFAULT_AIRLINE_TERMINAL_RULES: AirlineTerminalRule[] = [
   { airline_code: "B2", terminal_code: "T2", is_active: true, note: "Yeni eklenen T2 havayolu" },
 ];
 
+const AIRLINE_CODE_ALIASES: Record<string, string[]> = {
+  PC: ["PGT"],
+  PGT: ["PC"],
+  TK: ["THY"],
+  THY: ["TK"],
+  XQ: ["SXS"],
+  SXS: ["XQ"],
+  VF: ["AJE"],
+  AJE: ["VF"],
+};
+
 const AIRLINE_TERMINAL_RULES_STORAGE_KEY = "airlineTerminalRules";
 
 const normalizeCode = (value?: string | null) => (value || "").toString().toUpperCase().trim();
+
+const getComparableAirlineCodes = (value?: string | null) => {
+  const normalized = normalizeCode(value);
+  if (!normalized) {
+    return [] as string[];
+  }
+
+  return [normalized, ...(AIRLINE_CODE_ALIASES[normalized] || [])];
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 
@@ -114,9 +134,10 @@ export const resolveServiceFlightTerminal = (
 ): ServiceTerminalCode | null => {
   const normalizedAirlineCode = normalizeCode(airlineIata);
   const normalizedDepartureTerminal = normalizeCode(departureTerminal);
+  const comparableAirlineCodes = getComparableAirlineCodes(airlineIata);
 
   // PC has operations on both T1 and T2. Resolve by actual departure terminal.
-  if (normalizedAirlineCode === "PC") {
+  if (comparableAirlineCodes.includes("PC")) {
     if (normalizedDepartureTerminal === "T1" || normalizedDepartureTerminal === "1") {
       return "T1";
     }
@@ -125,7 +146,7 @@ export const resolveServiceFlightTerminal = (
     }
   }
 
-  const matchedRule = rules.find((rule) => normalizeCode(rule.airline_code) === normalizedAirlineCode && rule.is_active);
+  const matchedRule = rules.find((rule) => comparableAirlineCodes.includes(normalizeCode(rule.airline_code)) && rule.is_active);
 
   if ((normalizedDepartureTerminal === "T2" || normalizedDepartureTerminal === "2") && matchedRule?.terminal_code === "T2") {
     return "T2";
