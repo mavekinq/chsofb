@@ -167,17 +167,20 @@ export const hasStoredSchedulePayload = () => {
 };
 
 const excelDateToIso = (value: unknown) => {
-  if (value instanceof Date) {
-    const year = value.getFullYear();
-    const month = String(value.getMonth() + 1).padStart(2, "0");
-    const day = String(value.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  }
-
+  // Prefer numeric serial path (timezone-independent, pure UTC arithmetic).
   if (typeof value === "number" && Number.isFinite(value)) {
     const base = new Date(Date.UTC(1899, 11, 30));
     base.setUTCDate(base.getUTCDate() + Math.floor(value));
     return base.toISOString().slice(0, 10);
+  }
+
+  // Date objects: use UTC methods so the result matches the serial-based path
+  // regardless of the host timezone.
+  if (value instanceof Date) {
+    const year = value.getUTCFullYear();
+    const month = String(value.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(value.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   }
 
   if (typeof value === "string") {
@@ -186,9 +189,14 @@ const excelDateToIso = (value: unknown) => {
       return normalized;
     }
 
+    // Parse as local date and format without UTC conversion so the date
+    // displayed matches what the user typed/sees, not a UTC-shifted value.
     const date = new Date(normalized);
     if (!Number.isNaN(date.getTime())) {
-      return date.toISOString().slice(0, 10);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
     }
   }
 
@@ -251,7 +259,9 @@ const buildSchedulePayload = (rows: Record<string, unknown>[]) => {
 
 export const parseScheduleWorkbook = async (file: File) => {
   const buffer = await file.arrayBuffer();
-  const workbook = read(buffer, { type: "array", cellDates: true });
+  // Do NOT pass cellDates:true — keep date cells as raw serial numbers so that
+  // excelDateToIso can convert them via pure UTC arithmetic (timezone-independent).
+  const workbook = read(buffer, { type: "array" });
   const firstSheetName = workbook.SheetNames[0];
 
   if (!firstSheetName) {
