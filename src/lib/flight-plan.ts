@@ -93,10 +93,11 @@ export const createFlightPlanPositionLookup = (entries: FlightPlanEntry[]) => {
 };
 
 export const fetchFlightPlanEntries = async () => {
-  const response = await fetch(SHEET_URL);
+  const url = `${SHEET_URL}&_t=${Date.now()}`;
+  const response = await fetch(url, { cache: "no-store" });
   const text = await response.text();
   const lines = text.split("\n").filter(Boolean);
-  if (lines.length < 2) {
+  if (lines.length < 4) {
     return [] as FlightPlanEntry[];
   }
 
