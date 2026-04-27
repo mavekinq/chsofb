@@ -1,4 +1,6 @@
 import scheduleData from "@/data/workSchedule.json";
+import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { read, utils } from "xlsx";
 
 export type Employee = {
@@ -17,6 +19,8 @@ export type SchedulePayload = {
 
 const DEFAULT_SCHEDULE = scheduleData as SchedulePayload;
 const STORAGE_KEY = "workSchedulePayload";
+const REMOTE_TABLE = "work_schedule_state";
+const REMOTE_ROW_ID = "global";
 export const WORK_SCHEDULE_UPDATED_EVENT = "work-schedule-updated";
 const DATE_COLUMNS = ["C", "D", "E", "F", "G", "H", "I"] as const;
 
@@ -41,7 +45,40 @@ export const isValidSchedulePayload = (value: unknown): value is SchedulePayload
 
 export const getDefaultSchedulePayload = () => DEFAULT_SCHEDULE;
 
+export const isCustomSchedulePayload = (payload: SchedulePayload) => {
+  return JSON.stringify(payload) !== JSON.stringify(DEFAULT_SCHEDULE);
+};
+
+const isWorkScheduleTableMissing = (error: unknown) => {
+  if (!isRecord(error)) {
+    return false;
+  }
+
+  return error.code === "PGRST205"
+    || (typeof error.message === "string" && error.message.includes("work_schedule_state"));
+};
+
+const writeLocalSchedulePayload = (payload: SchedulePayload) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+};
+
+const dispatchScheduleUpdated = (payload: SchedulePayload) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent(WORK_SCHEDULE_UPDATED_EVENT, { detail: payload }));
+};
+
 export const getStoredSchedulePayload = () => {
+  if (typeof window === "undefined") {
+    return DEFAULT_SCHEDULE;
+  }
+
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (!stored) return DEFAULT_SCHEDULE;
 
@@ -53,17 +90,81 @@ export const getStoredSchedulePayload = () => {
   }
 };
 
-export const saveSchedulePayload = (payload: SchedulePayload) => {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  window.dispatchEvent(new CustomEvent(WORK_SCHEDULE_UPDATED_EVENT, { detail: payload }));
+export const loadSchedulePayload = async () => {
+  const localPayload = getStoredSchedulePayload();
+
+  try {
+    const { data, error } = await supabase
+      .from(REMOTE_TABLE)
+      .select("payload")
+      .eq("id", REMOTE_ROW_ID)
+      .maybeSingle();
+
+    if (error) {
+      if (!isWorkScheduleTableMissing(error)) {
+        console.error("Central schedule fetch failed:", error);
+      }
+      return localPayload;
+    }
+
+    if (!data || !isRecord(data) || !isValidSchedulePayload(data.payload)) {
+      return localPayload;
+    }
+
+    const remotePayload = data.payload;
+    writeLocalSchedulePayload(remotePayload);
+    dispatchScheduleUpdated(remotePayload);
+    return remotePayload;
+  } catch (error) {
+    console.error("Central schedule fetch failed:", error);
+    return localPayload;
+  }
 };
 
-export const clearStoredSchedulePayload = () => {
-  window.localStorage.removeItem(STORAGE_KEY);
-  window.dispatchEvent(new CustomEvent(WORK_SCHEDULE_UPDATED_EVENT, { detail: DEFAULT_SCHEDULE }));
+export const saveSchedulePayload = async (payload: SchedulePayload) => {
+  writeLocalSchedulePayload(payload);
+  dispatchScheduleUpdated(payload);
+
+  const { error } = await supabase
+    .from(REMOTE_TABLE)
+    .upsert({
+      id: REMOTE_ROW_ID,
+      payload: payload as unknown as Json,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "id" });
+
+  if (error) {
+    throw error;
+  }
 };
 
-export const hasStoredSchedulePayload = () => Boolean(window.localStorage.getItem(STORAGE_KEY));
+export const clearStoredSchedulePayload = async () => {
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(STORAGE_KEY);
+  }
+
+  dispatchScheduleUpdated(DEFAULT_SCHEDULE);
+
+  const { error } = await supabase
+    .from(REMOTE_TABLE)
+    .upsert({
+      id: REMOTE_ROW_ID,
+      payload: DEFAULT_SCHEDULE as unknown as Json,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "id" });
+
+  if (error) {
+    throw error;
+  }
+};
+
+export const hasStoredSchedulePayload = () => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return Boolean(window.localStorage.getItem(STORAGE_KEY));
+};
 
 const excelDateToIso = (value: unknown) => {
   if (value instanceof Date) {

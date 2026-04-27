@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { CalendarDays } from "lucide-react";
 import {
   getStoredSchedulePayload,
-  hasStoredSchedulePayload,
+  isCustomSchedulePayload,
+  loadSchedulePayload,
   type SchedulePayload,
   WORK_SCHEDULE_UPDATED_EVENT,
 } from "@/lib/work-schedule";
@@ -87,6 +88,19 @@ const WorkSchedulePage = () => {
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60000);
     return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    void loadSchedulePayload().then((nextPayload) => {
+      const nextNow = new Date();
+      const nextTodayKey = `${nextNow.getFullYear()}-${String(nextNow.getMonth() + 1).padStart(2, "0")}-${String(nextNow.getDate()).padStart(2, "0")}`;
+      setPayload(nextPayload);
+      setSelectedDate((current) => (
+        nextPayload.weekDates.includes(current)
+          ? current
+          : getPreferredSelectedDate(nextPayload.weekDates, nextTodayKey)
+      ));
+    });
   }, []);
 
   useEffect(() => {
@@ -249,7 +263,7 @@ const WorkSchedulePage = () => {
         <div className="bg-card border border-border rounded-lg p-4 mb-4 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs text-muted-foreground">Veri Kaynagi</p>
-            <p className="font-medium">{hasStoredSchedulePayload() ? "Tarayiciya yuklenen yeni hafta" : "Projeye gomulu varsayilan hafta"}</p>
+            <p className="font-medium">{isCustomSchedulePayload(payload) ? "Supabase merkezi haftalik program" : "Varsayilan haftalik program"}</p>
           </div>
           <p className="text-sm text-muted-foreground">{payload.weekDates[0] && payload.weekDates[payload.weekDates.length - 1] ? `${payload.weekDates[0]} - ${payload.weekDates[payload.weekDates.length - 1]}` : "Hafta verisi yok"}</p>
         </div>

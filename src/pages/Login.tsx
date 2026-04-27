@@ -7,7 +7,7 @@ import { ArrowLeft, Bell, KeyRound, ShieldCheck, UserRound } from "lucide-react"
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { hasAdminCredentials, isAdminUsername, isValidAdminPassword } from "@/lib/admin-auth";
-import { getStoredSchedulePayload } from "@/lib/work-schedule";
+import { loadSchedulePayload } from "@/lib/work-schedule";
 
 type StoredStaffUser = {
   id: string;
@@ -142,7 +142,7 @@ const Login = () => {
       return null;
     }
 
-    const schedulePayload = getStoredSchedulePayload();
+    const schedulePayload = await loadSchedulePayload();
     const candidateNames = [
       ...(shifts || []).map((item) => stripShiftNameSuffix(item.staff_name || "")),
       ...schedulePayload.employees.map((employee) => stripShiftNameSuffix(employee.name || "")),

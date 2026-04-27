@@ -19,8 +19,9 @@ import { triggerGoogleSheetsSync } from "@/lib/google-sheets-sync";
 import { extractAssignedStaffFromService, getVisibleServiceNotes } from "@/lib/wheelchair-service-utils";
 import {
   clearStoredSchedulePayload,
+  isCustomSchedulePayload,
+  loadSchedulePayload,
   getStoredSchedulePayload,
-  hasStoredSchedulePayload,
   isValidSchedulePayload,
   parseScheduleWorkbook,
   saveSchedulePayload,
@@ -148,7 +149,7 @@ const AdminControlPage = () => {
   const [handoverTrendLogs, setHandoverTrendLogs] = useState<HandoverTrendRow[]>([]);
   const [pushSubscriptions, setPushSubscriptions] = useState<PushSubscriptionRow[]>([]);
   const [schedulePayload, setSchedulePayload] = useState<SchedulePayload>(() => getStoredSchedulePayload());
-  const [hasCustomSchedule, setHasCustomSchedule] = useState(() => hasStoredSchedulePayload());
+  const [hasCustomSchedule, setHasCustomSchedule] = useState(() => isCustomSchedulePayload(getStoredSchedulePayload()));
   const [briefingDraft, setBriefingDraft] = useState(() => getBriefings().join("\n"));
   const [customBriefingsActive, setCustomBriefingsActive] = useState(() => hasCustomBriefings());
   const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
@@ -959,11 +960,15 @@ const AdminControlPage = () => {
     }
   };
 
-  const refreshScheduleState = () => {
-    const nextPayload = getStoredSchedulePayload();
+  const refreshScheduleState = async () => {
+    const nextPayload = await loadSchedulePayload();
     setSchedulePayload(nextPayload);
-    setHasCustomSchedule(hasStoredSchedulePayload());
+    setHasCustomSchedule(isCustomSchedulePayload(nextPayload));
   };
+
+  useEffect(() => {
+    void refreshScheduleState();
+  }, []);
 
   const handleScheduleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -987,8 +992,8 @@ const AdminControlPage = () => {
         nextPayload = parsed;
       }
 
-      saveSchedulePayload(nextPayload);
-      refreshScheduleState();
+      await saveSchedulePayload(nextPayload);
+      await refreshScheduleState();
       toast.success("Yeni haftanin calisma programi guncellendi");
     } catch {
       toast.error("Dosya okunamadi veya Excel/JSON formati hatali");
@@ -997,10 +1002,14 @@ const AdminControlPage = () => {
     }
   };
 
-  const handleResetSchedule = () => {
-    clearStoredSchedulePayload();
-    refreshScheduleState();
-    toast.success("Varsayilan calisma programina donuldu");
+  const handleResetSchedule = async () => {
+    try {
+      await clearStoredSchedulePayload();
+      await refreshScheduleState();
+      toast.success("Varsayilan calisma programina donuldu");
+    } catch {
+      toast.error("Varsayilan program merkezi kayda yazilamadi");
+    }
   };
 
   const handleSaveBriefings = () => {

@@ -9,7 +9,7 @@ import { BRIEFINGS_UPDATED_EVENT, getBriefings } from "@/lib/briefings";
 import { CELEBI_NEWS_SOURCE_URL, type CelebiNewsItem, fetchCelebiNews } from "@/lib/celebi-news";
 import { fetchFlightPlanEntries } from "@/lib/flight-plan";
 import { ensurePushSubscription, getNotificationPermissionState, isNotificationSupported, requiresInstalledPwaForPush, syncPushSubscriptionIfEnabled } from "@/lib/notifications";
-import { getStoredSchedulePayload, type SchedulePayload, WORK_SCHEDULE_UPDATED_EVENT } from "@/lib/work-schedule";
+import { getStoredSchedulePayload, loadSchedulePayload, type SchedulePayload, WORK_SCHEDULE_UPDATED_EVENT } from "@/lib/work-schedule";
 import { toast } from "sonner";
 
 type DashboardSummary = {
@@ -145,6 +145,10 @@ const MainMenu = () => {
       const customEvent = event as CustomEvent<SchedulePayload> | undefined;
       setSchedulePayload(customEvent?.detail || getStoredSchedulePayload());
     };
+
+    void loadSchedulePayload().then((payload) => {
+      setSchedulePayload(payload);
+    });
 
     window.addEventListener(WORK_SCHEDULE_UPDATED_EVENT, syncSchedule as EventListener);
     window.addEventListener("storage", syncSchedule);
