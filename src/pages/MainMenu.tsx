@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { Accessibility, ArrowRight, Bell, Briefcase, CalendarDays, ExternalLink, LogOut, Megaphone, Newspaper, Plane, RefreshCw, Shield, Users } from "lucide-react";
+import { Accessibility, ArrowRight, Bell, Briefcase, CalendarDays, ExternalLink, LogOut, Megaphone, Newspaper, Phone, Plane, RefreshCw, Shield, Users } from "lucide-react";
 import SplashScreen from "@/components/SplashScreen";
 import { BRIEFINGS_UPDATED_EVENT, getBriefings } from "@/lib/briefings";
 import { CELEBI_NEWS_SOURCE_URL, type CelebiNewsItem, fetchCelebiNews } from "@/lib/celebi-news";
@@ -382,6 +382,10 @@ const MainMenu = () => {
                     <Button variant="outline" className="gap-2" onClick={() => navigate("/flights")}>
                       <Plane className="h-4 w-4" />
                       Uçuşlar
+                    </Button>
+                    <Button variant="outline" className="gap-2" onClick={() => navigate("/directory")}>
+                      <Phone className="h-4 w-4" />
+                      Çelebi Rehber
                     </Button>
                   </div>
                 </div>
