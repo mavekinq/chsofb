@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { getBriefings, hasCustomBriefings, resetBriefings, saveBriefings } from "@/lib/briefings";
+import { buildDeparturesPayload, buildFlightLookup, buildHandoversPayload, buildInventorySummaryPayload, buildSpecialServicesPayload, extractAirlineCodeFromFlightCode, parseHandoverDetails } from "@/lib/google-sheets-payload";
 import { fetchFlightPlanEntries, getFlightCodeMatchKeys, normalizeFlightCode, type FlightPlanEntry } from "@/lib/flight-plan";
 import { triggerGoogleSheetsSync } from "@/lib/google-sheets-sync";
 import { extractAssignedStaffFromService, getVisibleServiceNotes } from "@/lib/wheelchair-service-utils";
@@ -68,7 +69,7 @@ const getLocalDateKey = (value: string) => {
 };
 
 const parseHandoverRiskCount = (details: string) => {
-  const [, snapshot = ""] = details.split(" | ");
+  const { snapshot } = parseHandoverDetails(details);
   const missingCount = Number(snapshot.match(/🔴\s*(\d+)/)?.[1] || 0);
   const maintenanceCount = Number(snapshot.match(/🟠\s*(\d+)/)?.[1] || 0);
   return missingCount + maintenanceCount;
@@ -80,11 +81,6 @@ const calculateDeltaPercent = (current: number, baseline: number) => {
   }
 
   return ((current - baseline) / baseline) * 100;
-};
-
-const extractAirlineCodeFromFlightCode = (value: string) => {
-  const match = normalizeFlightCode(value).match(/^[A-Z0-9]+?(?=\d|$)/);
-  return match?.[0] || "";
 };
 
 const getMinuteOfDay = (date: Date) => date.getHours() * 60 + date.getMinutes();
@@ -600,102 +596,12 @@ const AdminControlPage = () => {
         throw serviceError || wheelchairError || handoverError;
       }
 
-      const departureFlightEntries = flightPlanEntries.filter((entry) => Boolean(entry.departureCode));
-      const flightLookup = new Map<string, FlightPlanEntry>();
-
-      departureFlightEntries.forEach((entry) => {
-        getFlightCodeMatchKeys(entry.departureCode).forEach((key) => {
-          if (!flightLookup.has(key)) {
-            flightLookup.set(key, entry);
-          }
-        });
-      });
-
-      const departures = departureFlightEntries.map((entry) => ({
-        updatedAt: new Date().toISOString(),
-        departureTime: entry.departureTime || "",
-        airline: extractAirlineCodeFromFlightCode(entry.departureCode),
-        flightCode: normalizeFlightCode(entry.departureCode),
-        destination: entry.departureIATA || "",
-        terminal: "",
-        gate: entry.parkPosition || "",
-        status: entry.specialNotes ? "noted" : "scheduled",
-        delayMinutes: 0,
-        plannedPosition: entry.parkPosition || "",
-      }));
-
       const services = (serviceRows || []) as ServiceRow[];
-      const specialServices = services.map((service) => {
-        const visibleNotes = getVisibleServiceNotes(service.notes);
-        const matchedEntry = getFlightCodeMatchKeys(service.flight_iata || "")
-          .map((key) => flightLookup.get(key))
-          .find(Boolean);
-
-        return {
-          createdAt: service.created_at,
-          flightCode: normalizeFlightCode(service.flight_iata || ""),
-          airline: matchedEntry ? extractAirlineCodeFromFlightCode(matchedEntry.departureCode) : extractAirlineCodeFromFlightCode(service.flight_iata || ""),
-          destination: matchedEntry?.departureIATA || "",
-          terminal: service.terminal || "",
-          gate: matchedEntry?.parkPosition || "",
-          passengerType: service.passenger_type || "",
-          assignedStaff: extractAssignedStaffFromService(service) || "",
-          createdBy: service.created_by || "",
-          wheelchairId: service.wheelchair_id || "",
-          specialNotes: visibleNotes || "-",
-        };
-      }) as Array<{
-        createdAt: string;
-        flightCode: string;
-        airline: string;
-        destination: string;
-        terminal: string;
-        gate: string;
-        passengerType: string;
-        assignedStaff: string;
-        createdBy: string;
-        wheelchairId: string;
-        specialNotes: string;
-      }>;
-
-      const inventoryByTerminal = new Map<string, { available: number; missing: number; maintenance: number }>();
-      (wheelchairRows || []).forEach((row) => {
-        const terminal = (row.terminal || "GENEL").trim() || "GENEL";
-        const current = inventoryByTerminal.get(terminal) || { available: 0, missing: 0, maintenance: 0 };
-        if (row.status === "missing") {
-          current.missing += 1;
-        } else if (row.status === "maintenance") {
-          current.maintenance += 1;
-        } else {
-          current.available += 1;
-        }
-        inventoryByTerminal.set(terminal, current);
-      });
-
-      const inventorySummary = Array.from(inventoryByTerminal.entries())
-        .sort((left, right) => left[0].localeCompare(right[0], "tr"))
-        .map(([terminal, counts]) => ({
-          updatedAt: new Date().toISOString(),
-          terminal,
-          available: counts.available,
-          missing: counts.missing,
-          maintenance: counts.maintenance,
-        }));
-
-      const handovers = (handoverLogRows || []).map((log) => {
-        const details = log.details || "";
-        const [transitionPart = "", snapshot = "", checklist = ""] = details.split(" | ");
-        const transitionMatch = transitionPart.match(/^(.*?) → (.*?) \((.*?)\)$/);
-
-        return {
-          createdAt: log.created_at,
-          terminal: transitionMatch?.[3] || "",
-          fromStaff: transitionMatch?.[1] || log.performed_by || "",
-          toStaff: transitionMatch?.[2] || "",
-          snapshot: snapshot || "",
-          checklist: checklist || "",
-        };
-      });
+      const flightLookup = buildFlightLookup(flightPlanEntries);
+      const departures = buildDeparturesPayload(flightPlanEntries, services);
+      const specialServices = buildSpecialServicesPayload(flightLookup, services);
+      const inventorySummary = buildInventorySummaryPayload((wheelchairRows || []) as Array<{ terminal: string | null; status: string | null }>);
+      const handovers = buildHandoversPayload((handoverLogRows || []) as Array<{ created_at: string; details?: string | null; performed_by?: string | null }>);
 
       const result = await triggerGoogleSheetsSync({
         departures,
@@ -764,16 +670,15 @@ const AdminControlPage = () => {
   };
 
   const parseHandoverLog = (log: ActionLog): HandoverRecord => {
-    const [transitionPart = "", snapshot = "", checklist = ""] = log.details.split(" | ");
-    const transitionMatch = transitionPart.match(/^(.*?) → (.*?) \((.*?)\)$/);
+    const parsed = parseHandoverDetails(log.details, log.performed_by);
 
     return {
       id: log.id,
-      fromStaff: transitionMatch?.[1] || log.performed_by,
-      toStaff: transitionMatch?.[2] || "-",
-      terminal: transitionMatch?.[3] || "-",
-      snapshot: snapshot || "Kayit yok",
-      checklist: checklist || "Checklist bilgisi yok",
+      fromStaff: parsed.fromStaff || log.performed_by,
+      toStaff: parsed.toStaff || "-",
+      terminal: parsed.terminal || "-",
+      snapshot: parsed.snapshot,
+      checklist: parsed.checklist,
       createdAt: log.created_at,
     };
   };

@@ -11,12 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 const NOTE_TEMPLATES = [
-  "Refakatçi var",
-  "Ambulift gerekli",
-  "Gate değişti",
-  "Bağlantılı yolcu",
-  "Yaşlı yolcu",
-  "Öncelikli hizmet",
+  "Tekeri Bozuk",
+  "Frenleri Çalışmıyor",
+  "Teknikte",
+  "Ayaklık Kırık",
+  "Emniyet Kemeri Yok",
+  "Kullanmaya Uygun Değil",
 ];
 
 interface NoteDialogProps {

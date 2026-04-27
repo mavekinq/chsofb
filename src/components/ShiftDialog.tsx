@@ -20,8 +20,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { triggerGoogleSheetsSync } from "@/lib/google-sheets-sync";
-import { fetchFlightPlanEntries, getFlightCodeMatchKeys, normalizeFlightCode } from "@/lib/flight-plan";
-import { extractAssignedStaffFromService, getVisibleServiceNotes } from "@/lib/wheelchair-service-utils";
+import { fetchFlightPlanEntries } from "@/lib/flight-plan";
+import { buildDeparturesPayload, buildFlightLookup, buildHandoversPayload, buildInventorySummaryPayload, buildSpecialServicesPayload, parseHandoverDetails } from "@/lib/google-sheets-payload";
 import { Clock, User, LogIn, LogOut, Building2 } from "lucide-react";
 import type { Wheelchair } from "@/components/WheelchairCard";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -167,13 +167,12 @@ const ShiftDialog = ({ open, onOpenChange, wheelchairs = [] }: ShiftDialogProps)
       const available = terminalWc.filter((w) => w.status === "available").length;
       const missing = terminalWc.filter((w) => w.status === "missing").length;
       const maintenance = terminalWc.filter((w) => w.status === "maintenance").length;
-      const notedWc = terminalWc.filter((w) => w.note).map((w) => `${w.wheelchair_id}:${w.note}`).join(", ");
-      const snapshot = `✅${available} 🔴${missing} 🟠${maintenance}${notedWc ? ` | Notlu: ${notedWc}` : ""}`;
+      const snapshot = `✅${available} 🔴${missing} 🟠${maintenance}`;
       const checklistSummary = [
         `Sayim: ${wheelchairCountChecked ? "Tamam" : "Eksik"}`,
         `Ofis: ${officeCleaned ? "Temiz" : "Eksik"}`,
-        `Aksaklik: ${disruptionNote.trim() || "Yok"}`,
-      ].join(" | ");
+        `Not: ${disruptionNote.trim() || "Yok"}`,
+      ].join(", ");
       // Devir kaydını action_logs'a yaz
       await supabase.from("action_logs").insert({
         wheelchair_id: "VARDIYA",
@@ -199,57 +198,11 @@ const ShiftDialog = ({ open, onOpenChange, wheelchairs = [] }: ShiftDialogProps)
             supabase.from("action_logs").select("created_at, details, performed_by").eq("action", "Vardiya Devri").gte("created_at", todayStartIso).order("created_at", { ascending: false }),
           ]);
 
-          const flightLookup = new Map<string, (typeof flightPlanEntries)[0]>();
-          flightPlanEntries.filter(e => e.departureCode).forEach(e => {
-            getFlightCodeMatchKeys(e.departureCode).forEach(k => { if (!flightLookup.has(k)) flightLookup.set(k, e); });
-          });
-
-          const specialServices = (allServices || []).map((svc) => {
-            const matched = getFlightCodeMatchKeys(svc.flight_iata || "").map(k => flightLookup.get(k)).find(Boolean);
-            return {
-              createdAt: svc.created_at,
-              flightCode: normalizeFlightCode(svc.flight_iata || ""),
-              airline: matched ? matched.departureCode.replace(/\d/g, "").trim() : (svc.flight_iata || "").replace(/\d/g, "").trim(),
-              destination: matched?.departureIATA || "",
-              terminal: svc.terminal || "",
-              gate: matched?.parkPosition || "",
-              passengerType: svc.passenger_type || "",
-              assignedStaff: extractAssignedStaffFromService(svc) || "",
-              createdBy: svc.created_by || "",
-              wheelchairId: svc.wheelchair_id || "",
-              specialNotes: getVisibleServiceNotes(svc.notes) || "-",
-            };
-          });
-
-          const departures = flightPlanEntries.filter(e => e.departureCode).map(e => ({
-            updatedAt: new Date().toISOString(),
-            departureTime: e.departureTime || "",
-            airline: e.departureCode.replace(/\d/g, "").trim(),
-            flightCode: normalizeFlightCode(e.departureCode),
-            destination: e.departureIATA || "",
-            terminal: "",
-            gate: e.parkPosition || "",
-            status: e.specialNotes ? "noted" : "scheduled",
-            delayMinutes: 0,
-            plannedPosition: e.parkPosition || "",
-          }));
-
-          const invMap = new Map<string, { available: number; missing: number; maintenance: number }>();
-          (wheelchairRows || []).forEach(r => {
-            const t = (r.terminal || "GENEL").trim() || "GENEL";
-            const cur = invMap.get(t) || { available: 0, missing: 0, maintenance: 0 };
-            if (r.status === "missing") cur.missing += 1;
-            else if (r.status === "maintenance") cur.maintenance += 1;
-            else cur.available += 1;
-            invMap.set(t, cur);
-          });
-          const inventorySummary = Array.from(invMap.entries()).sort((a, b) => a[0].localeCompare(b[0], "tr")).map(([t, c]) => ({ updatedAt: new Date().toISOString(), terminal: t, ...c }));
-
-          const handovers = (handoverLogRows || []).map(log => {
-            const [transitionPart = "", snap = "", cl = ""] = log.details.split(" | ");
-            const m = transitionPart.match(/^(.*?) → (.*?) \((.*?)\)$/);
-            return { createdAt: log.created_at, terminal: m?.[3] || "", fromStaff: m?.[1] || log.performed_by || "", toStaff: m?.[2] || "", snapshot: snap || "", checklist: cl || "" };
-          });
+          const services = allServices || [];
+          const departures = buildDeparturesPayload(flightPlanEntries, services);
+          const specialServices = buildSpecialServicesPayload(buildFlightLookup(flightPlanEntries), services);
+          const inventorySummary = buildInventorySummaryPayload(wheelchairRows || []);
+          const handovers = buildHandoversPayload(handoverLogRows || []);
 
           await triggerGoogleSheetsSync({ departures, specialServices, inventorySummary, handovers });
         } catch (syncErr) {
@@ -532,7 +485,7 @@ const ShiftDialog = ({ open, onOpenChange, wheelchairs = [] }: ShiftDialogProps)
                             </div>
                             {matchLog && (
                               <div className="mt-1.5 text-xs text-muted-foreground bg-card rounded p-1.5 border border-border">
-                                {matchLog.details.split(" | ").slice(1).join(" | ")}
+                                {parseHandoverDetails(matchLog.details).checklist}
                               </div>
                             )}
                           </div>

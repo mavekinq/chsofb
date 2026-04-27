@@ -10,6 +10,7 @@ type FlightPlanEntry = {
   departureTime: string;
   departureIATA: string;
   parkPosition: string;
+  tailNumber: string;
   specialNotes?: string;
 };
 
@@ -127,6 +128,7 @@ const fetchFlightPlanEntries = async () => {
         departureTime: cols[6] || "",
         departureIATA: cols[8] || "",
         parkPosition: cols[9] || "",
+        tailNumber: cols[4] || "",
         specialNotes: cols[11] || "",
       } satisfies FlightPlanEntry;
     })
@@ -151,6 +153,77 @@ const extractAssignedStaffFromService = (notes?: string | null) => {
   }
   const firstLine = normalizedNotes.split(/\r?\n/, 1)[0] || "";
   return firstLine.slice(prefix.length).trim();
+};
+
+const buildFlightLookup = (flightPlans: FlightPlanEntry[]) => {
+  const flightLookup = new Map<string, FlightPlanEntry>();
+
+  flightPlans
+    .filter((entry) => Boolean(entry.departureCode))
+    .forEach((entry) => {
+      getFlightCodeMatchKeys(entry.departureCode).forEach((key) => {
+        if (!flightLookup.has(key)) {
+          flightLookup.set(key, entry);
+        }
+      });
+    });
+
+  return flightLookup;
+};
+
+const buildDepartureWheelchairCountMap = (flightLookup: Map<string, FlightPlanEntry>, services: ServiceRow[]) => {
+  const counts = new Map<string, number>();
+
+  services.forEach((service) => {
+    const matchedEntry = getFlightCodeMatchKeys(service.flight_iata || "")
+      .map((key) => flightLookup.get(key))
+      .find(Boolean);
+    const flightCode = normalizeFlightCode(matchedEntry?.departureCode || service.flight_iata || "");
+
+    if (!flightCode) {
+      return;
+    }
+
+    counts.set(flightCode, (counts.get(flightCode) || 0) + 1);
+  });
+
+  return counts;
+};
+
+const parseHandoverDetails = (details?: string | null, performedBy?: string | null) => {
+  const segments = (details || "")
+    .split(" | ")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  const transitionPart = segments.shift() || "";
+  const transitionMatch = transitionPart.match(/^(.*?) → (.*?) \((.*?)\)$/);
+  const snapshot = segments.shift() || "";
+
+  if (segments[0]?.startsWith("Notlu:")) {
+    segments.shift();
+  }
+
+  const checklistSegments = segments
+    .flatMap((segment) => segment.split(/,\s*(?=(?:Sayim|Ofis|Aksaklik|Not):)/))
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  const wheelchairCountStatus = checklistSegments.find((segment) => segment.startsWith("Sayim:"));
+  const officeStatus = checklistSegments.find((segment) => segment.startsWith("Ofis:"));
+  const noteSegment = checklistSegments.find((segment) => segment.startsWith("Aksaklik:") || segment.startsWith("Not:"));
+  const noteValue = noteSegment ? noteSegment.replace(/^(?:Aksaklik|Not):\s*/i, "").trim() : "";
+  const checklist = [wheelchairCountStatus, officeStatus]
+    .filter(Boolean)
+    .concat(noteValue && noteValue.toLocaleLowerCase("tr") !== "yok" ? [`Not: ${noteValue}`] : [])
+    .join(" • ") || "Checklist bilgisi yok";
+
+  return {
+    terminal: transitionMatch?.[3] || "",
+    fromStaff: transitionMatch?.[1] || performedBy || "",
+    toStaff: transitionMatch?.[2] || "",
+    snapshot: snapshot || "Kayit yok",
+    checklist,
+  };
 };
 
 const translatePassengerType = (value: string | null) => {
@@ -254,28 +327,23 @@ Deno.serve(async (request: Request) => {
     }
 
     const departureFlightEntries = (flightPlans || []).filter((entry: FlightPlanEntry) => Boolean(entry.departureCode));
-
-    const flightLookup = new Map<string, FlightPlanEntry>();
-    departureFlightEntries.forEach((entry: FlightPlanEntry) => {
-      getFlightCodeMatchKeys(entry.departureCode).forEach((key) => {
-        if (!flightLookup.has(key)) {
-          flightLookup.set(key, entry);
-        }
-      });
-    });
+    const services = serviceRows || [];
+    const flightLookup = buildFlightLookup(departureFlightEntries);
+    const wheelchairCounts = buildDepartureWheelchairCountMap(flightLookup, services);
 
     const departures = departureFlightEntries
       .map((entry: FlightPlanEntry) => ({
         departureTime: entry.departureTime || "",
         airline: extractAirlineCodeFromFlightCode(entry.departureCode),
         flightCode: normalizeFlightCode(entry.departureCode),
+        tailCode: (entry.tailNumber || "").trim(),
         destination: entry.departureIATA || "",
         gate: entry.parkPosition || "",
-        plannedPosition: entry.parkPosition || "",
+        wheelchairCount: wheelchairCounts.get(normalizeFlightCode(entry.departureCode)) || 0,
       }))
       .filter((row: { destination: string }) => row.destination !== "");
 
-    const specialServices = (serviceRows || [])
+    const specialServices = services
       .map((service: ServiceRow) => {
         const visibleNotes = getVisibleServiceNotes(service.notes);
         const matchedEntry = getFlightCodeMatchKeys(service.flight_iata || "")
@@ -323,20 +391,10 @@ Deno.serve(async (request: Request) => {
         maintenance: counts.maintenance,
       }));
 
-    const handovers = (handoverLogs || []).map((log: HandoverLogRow) => {
-      const details = log.details || "";
-      const [transitionPart = "", snapshot = "", checklist = ""] = details.split(" | ");
-      const transitionMatch = transitionPart.match(/^(.*?) → (.*?) \((.*?)\)$/);
-
-      return {
-        createdAt: log.created_at,
-        terminal: transitionMatch?.[3] || "",
-        fromStaff: transitionMatch?.[1] || log.performed_by || "",
-        toStaff: transitionMatch?.[2] || "",
-        snapshot: snapshot || "",
-        checklist: checklist || "",
-      };
-    });
+    const handovers = (handoverLogs || []).map((log: HandoverLogRow) => ({
+      createdAt: log.created_at,
+      ...parseHandoverDetails(log.details, log.performed_by),
+    }));
 
     const payload = {
       departures,

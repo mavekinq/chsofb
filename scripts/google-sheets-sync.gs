@@ -63,12 +63,12 @@ function doPost(e) {
 
 function buildSections_(payload) {
   const departuresHeaders = [
-    'Kalkis Saati',
-    'Havayolu',
     'Ucus Kodu',
+    'Kuyruk Kodu',
+    'Kalkis Saati',
     'Varis Noktasi',
     'Kapi',
-    'Planlanan Pozisyon',
+    'WCH Sayisi',
   ];
 
   const specialServicesHeaders = [
@@ -177,7 +177,104 @@ function upsertUnifiedSheet_(spreadsheet, sections, targetSheetName) {
 
   sheet.setTabColor('#2563EB');
   sheet.autoResizeColumns(1, maxColumns);
+
+  // F kolonu (WCH Sayisi) auto-resize sonrasi biraz daha genis olsun.
+  if (maxColumns >= 6) {
+    const currentFWidth = sheet.getColumnWidth(6);
+    sheet.setColumnWidth(6, Math.min(currentFWidth + 20, 220));
+  }
+
+  // DEPARTURES satirlari icin saat bazli renklendirme (sadece Ucus Kodu sutunu).
+  styleDeparturesRows_(sheet, 3, sections.departures.rows, sections.departures.headers.length);
+
   sheet.setFrozenRows(0);
+}
+
+function styleDeparturesRows_(sheet, dataStartRow, rows, columnCount) {
+  if (!rows || rows.length === 0 || columnCount <= 0) {
+    return;
+  }
+
+  const nowMinutes = getCurrentMinutesOfDay_();
+  const adjustedDepartureMinutes = buildAdjustedDepartureMinutes_(rows, 2);
+  const backgrounds = [];
+  const fontColors = [];
+
+  rows.forEach(function(row, index) {
+    const departureMinutes = adjustedDepartureMinutes[index];
+    const rowBackgrounds = Array(columnCount).fill('#FFFFFF');
+    const rowFontColors = Array(columnCount).fill('#111827');
+
+    if (departureMinutes !== null) {
+      const minutesUntilDeparture = departureMinutes - nowMinutes;
+
+      if (minutesUntilDeparture < 0) {
+        // Ucan (saati gecmis) ucuslar: sadece Ucus Kodu sutunu yesil.
+        rowBackgrounds[0] = '#09ff00';
+        rowFontColors[0] = '#14532D';
+      } else if (minutesUntilDeparture <= 180) {
+        // Kalkisa 3 saat veya daha az kalanlar: sadece Ucus Kodu sutunu turuncu.
+        rowBackgrounds[0] = '#FFEDD5';
+        rowFontColors[0] = '#9A3412';
+      }
+    }
+
+    backgrounds.push(rowBackgrounds);
+    fontColors.push(rowFontColors);
+  });
+
+  const range = sheet.getRange(dataStartRow, 1, rows.length, columnCount);
+  range.setBackgrounds(backgrounds);
+  range.setFontColors(fontColors);
+}
+
+function buildAdjustedDepartureMinutes_(rows, timeColumnIndex) {
+  const adjusted = [];
+  let dayOffset = 0;
+  let previousRawMinutes = null;
+
+  rows.forEach(function(row) {
+    const rawMinutes = parseTimeToMinutes_(row[timeColumnIndex]);
+
+    if (rawMinutes === null) {
+      adjusted.push(null);
+      return;
+    }
+
+    // Liste 23:xx'den sonra 00:xx'e dustugunde alt satirlari ertesi gun say.
+    if (previousRawMinutes !== null && rawMinutes < previousRawMinutes) {
+      dayOffset += 1440;
+    }
+
+    adjusted.push(rawMinutes + dayOffset);
+    previousRawMinutes = rawMinutes;
+  });
+
+  return adjusted;
+}
+
+function getCurrentMinutesOfDay_() {
+  const nowTime = Utilities.formatDate(new Date(), CONFIG.timezone, 'HH:mm');
+  const parsed = parseTimeToMinutes_(nowTime);
+  return parsed === null ? 0 : parsed;
+}
+
+function parseTimeToMinutes_(value) {
+  const text = String(value || '').trim();
+  const match = text.match(/(\d{1,2}):(\d{2})/);
+
+  if (!match) {
+    return null;
+  }
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return null;
+  }
+
+  return hour * 60 + minute;
 }
 
 function getDailySheetName_(date) {
@@ -284,6 +381,8 @@ function writeSectionBlock_(sheet, startRow, title, headers, rows, palette, maxC
     .setFontColor('#111827')
     .setFontWeight('bold')
     .setHorizontalAlignment('center');
+  sheet.getRange(headerRow, 1, 1, headers.length)
+    .setBorder(true, true, true, true, true, true, '#CBD5E1', SpreadsheetApp.BorderStyle.SOLID);
 
   if (rows.length === 0) {
     const placeholder = headers.map(function(_, index) {
@@ -294,6 +393,8 @@ function writeSectionBlock_(sheet, startRow, title, headers, rows, palette, maxC
       .setValues([placeholder])
       .setHorizontalAlignment('center')
       .setVerticalAlignment('middle');
+    sheet.getRange(headerRow + 1, 1, 1, headers.length)
+      .setBorder(true, true, true, true, true, true, '#E2E8F0', SpreadsheetApp.BorderStyle.SOLID);
 
     return headerRow + 3;
   }
@@ -302,6 +403,8 @@ function writeSectionBlock_(sheet, startRow, title, headers, rows, palette, maxC
     .setValues(rows)
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle');
+  sheet.getRange(headerRow + 1, 1, rows.length, headers.length)
+    .setBorder(true, true, true, true, true, true, '#E2E8F0', SpreadsheetApp.BorderStyle.SOLID);
 
   return headerRow + rows.length + 2;
 }
@@ -309,13 +412,24 @@ function writeSectionBlock_(sheet, startRow, title, headers, rows, palette, maxC
 function mapDepartures_(departures) {
   return departures
     .map(function(item) {
+      const tailCode = String(
+        item.tailCode ||
+        item.aircraftRegistration ||
+        item.tail ||
+        item.tailNumber ||
+        item.aircraftReg ||
+        item.registration ||
+        item.aircraft_registration ||
+        ''
+      ).trim();
+
       return [
-        String(item.departureTime || '').trim(),
-        String(item.airline || '').trim(),
         String(item.flightCode || '').trim(),
+        tailCode || '-',
+        String(item.departureTime || '').trim(),
         String(item.destination || '').trim(),
         String(item.gate || '').trim(),
-        String(item.plannedPosition || '').trim(),
+        Number(item.wheelchairCount || 0),
       ];
     })
     .filter(function(row) {

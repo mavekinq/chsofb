@@ -11,6 +11,7 @@ import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { fetchFlightPlanEntries, getFlightCodeMatchKeys, normalizeFlightCode } from "@/lib/flight-plan";
 import { triggerServicePushNotification } from "@/lib/notifications";
 import { triggerGoogleSheetsSync } from "@/lib/google-sheets-sync";
+import { buildDeparturesPayload, buildFlightLookup, buildInventorySummaryPayload, buildSpecialServicesPayload } from "@/lib/google-sheets-payload";
 import { buildServiceNotesWithAssignedStaff, extractAssignedStaffFromService, getVisibleServiceNotes, isAssignedStaffSchemaCacheError } from "@/lib/wheelchair-service-utils";
 import { matchesWheelchairInventoryTerminal } from "@/lib/wheelchair-terminals";
 import { toast } from "sonner";
@@ -459,51 +460,10 @@ const WheelchairServicesPage = () => {
             supabase.from("wheelchairs").select("terminal, status"),
           ]);
 
-          const flightLookup = new Map<string, (typeof flightPlanEntries)[0]>();
-          flightPlanEntries.filter(e => e.departureCode).forEach(e => {
-            getFlightCodeMatchKeys(e.departureCode).forEach(k => { if (!flightLookup.has(k)) flightLookup.set(k, e); });
-          });
-
-          const specialServices = (allServices || []).map((svc) => {
-            const matched = getFlightCodeMatchKeys(svc.flight_iata || "").map(k => flightLookup.get(k)).find(Boolean);
-            return {
-              createdAt: svc.created_at,
-              flightCode: normalizeFlightCode(svc.flight_iata || ""),
-              airline: matched ? extractAirlineCodeFromFlightCode(matched.departureCode) : extractAirlineCodeFromFlightCode(svc.flight_iata || ""),
-              destination: matched?.departureIATA || "",
-              terminal: svc.terminal || "",
-              gate: matched?.parkPosition || "",
-              passengerType: svc.passenger_type || "",
-              assignedStaff: extractAssignedStaffFromService(svc) || "",
-              createdBy: svc.created_by || "",
-              wheelchairId: svc.wheelchair_id || "",
-              specialNotes: getVisibleServiceNotes(svc.notes) || "-",
-            };
-          });
-
-          const departures = flightPlanEntries.filter(e => e.departureCode).map(e => ({
-            updatedAt: new Date().toISOString(),
-            departureTime: e.departureTime || "",
-            airline: extractAirlineCodeFromFlightCode(e.departureCode),
-            flightCode: normalizeFlightCode(e.departureCode),
-            destination: e.departureIATA || "",
-            terminal: "",
-            gate: e.parkPosition || "",
-            status: e.specialNotes ? "noted" : "scheduled",
-            delayMinutes: 0,
-            plannedPosition: e.parkPosition || "",
-          }));
-
-          const invMap = new Map<string, { available: number; missing: number; maintenance: number }>();
-          (wheelchairRows || []).forEach(r => {
-            const t = (r.terminal || "GENEL").trim() || "GENEL";
-            const cur = invMap.get(t) || { available: 0, missing: 0, maintenance: 0 };
-            if (r.status === "missing") cur.missing += 1;
-            else if (r.status === "maintenance") cur.maintenance += 1;
-            else cur.available += 1;
-            invMap.set(t, cur);
-          });
-          const inventorySummary = Array.from(invMap.entries()).sort((a, b) => a[0].localeCompare(b[0], "tr")).map(([t, c]) => ({ updatedAt: new Date().toISOString(), terminal: t, ...c }));
+          const services = allServices || [];
+          const departures = buildDeparturesPayload(flightPlanEntries, services);
+          const specialServices = buildSpecialServicesPayload(buildFlightLookup(flightPlanEntries), services);
+          const inventorySummary = buildInventorySummaryPayload(wheelchairRows || []);
 
           await triggerGoogleSheetsSync({ departures, specialServices, inventorySummary, handovers: [] });
         } catch (syncErr) {

@@ -6,12 +6,13 @@ export type GoogleSheetsSyncPayload = {
     departureTime: string;
     airline: string;
     flightCode: string;
+    tailCode?: string;
     destination: string;
     terminal?: string;
     gate?: string;
     status?: string;
     delayMinutes?: number;
-    plannedPosition?: string;
+    wheelchairCount?: number;
   }>;
   specialServices: Array<{
     createdAt?: string;
