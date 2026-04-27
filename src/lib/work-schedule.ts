@@ -166,12 +166,16 @@ export const hasStoredSchedulePayload = () => {
   return Boolean(window.localStorage.getItem(STORAGE_KEY));
 };
 
+const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+
 const excelDateToIso = (value: unknown) => {
   if (value instanceof Date) {
-    const year = value.getFullYear();
-    const month = String(value.getMonth() + 1).padStart(2, "0");
-    const day = String(value.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    // Add 12 hours (midday) before extracting the UTC date to guard against
+    // sub-minute timezone offsets (e.g. Istanbul's historical +2:56:56) that
+    // place the Date a few seconds before local midnight, which would cause
+    // getDate() / getUTCDate() to return the previous day.
+    const midday = new Date(value.getTime() + TWELVE_HOURS_MS);
+    return midday.toISOString().slice(0, 10);
   }
 
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -251,7 +255,7 @@ const buildSchedulePayload = (rows: Record<string, unknown>[]) => {
 
 export const parseScheduleWorkbook = async (file: File) => {
   const buffer = await file.arrayBuffer();
-  const workbook = read(buffer, { type: "array", cellDates: true });
+  const workbook = read(buffer, { type: "array" });
   const firstSheetName = workbook.SheetNames[0];
 
   if (!firstSheetName) {
