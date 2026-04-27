@@ -13,6 +13,42 @@ type FlightPlanEntry = {
   specialNotes?: string;
 };
 
+type ServiceRow = {
+  created_at: string;
+  flight_iata: string | null;
+  terminal: string | null;
+  passenger_type: string | null;
+  assigned_staff?: string | null;
+  created_by: string | null;
+  wheelchair_id: string | null;
+  notes?: string | null;
+};
+
+type WheelchairRow = {
+  terminal: string | null;
+  status: string | null;
+};
+
+type HandoverLogRow = {
+  created_at: string;
+  details: string | null;
+  performed_by: string | null;
+};
+
+const SHEET_URL =
+  "https://docs.google.com/spreadsheets/d/1-UVsf1_jZ_n_CPGqieMMWgMpbVnzzchuvexrseNUSqg/export?format=csv";
+
+const FLIGHT_CODE_ALIASES: Record<string, string[]> = {
+  PC: ["PGT"],
+  PGT: ["PC"],
+  TK: ["THY"],
+  THY: ["TK"],
+  XQ: ["SXS"],
+  SXS: ["XQ"],
+  VF: ["AJE"],
+  AJE: ["VF"],
+};
+
 const extractAirlineCodeFromFlightCode = (value: string) => {
   const match = (value || "").trim().toUpperCase().replace(/\s+/g, "").match(/^[A-Z0-9]+?(?=\d|$)/);
   return match?.[0] || "";
@@ -24,11 +60,77 @@ const normalizeFlightCode = (value: string) => {
 
 const getFlightCodeMatchKeys = (flightCode: string) => {
   const normalized = normalizeFlightCode(flightCode);
-  return [
-    normalized,
-    normalized.slice(0, 2),
-    normalized.slice(0, 3),
-  ];
+  if (!normalized) {
+    return [] as string[];
+  }
+
+  const keys = new Set<string>([normalized]);
+  const prefixMatch = normalized.match(/^[A-Z]+/);
+  const prefix = prefixMatch?.[0] || "";
+  const numberPart = normalized.slice(prefix.length);
+
+  if (numberPart) {
+    keys.add(numberPart);
+  }
+
+  if (prefix && numberPart) {
+    (FLIGHT_CODE_ALIASES[prefix] || []).forEach((alias) => {
+      keys.add(`${alias}${numberPart}`);
+    });
+  }
+
+  return Array.from(keys);
+};
+
+const parseCSVLine = (line: string): string[] => {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
+      result.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+
+  result.push(current.trim());
+  return result;
+};
+
+const fetchFlightPlanEntries = async () => {
+  const response = await fetch(`${SHEET_URL}&_t=${Date.now()}`, {
+    headers: { "Cache-Control": "no-cache" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Flight source fetch failed: ${response.status}`);
+  }
+
+  const text = await response.text();
+  const lines = text.split("\n").filter(Boolean);
+  if (lines.length < 4) {
+    return [] as FlightPlanEntry[];
+  }
+
+  return lines
+    .slice(3)
+    .map((line) => {
+      const cols = parseCSVLine(line);
+      return {
+        departureCode: cols[2] || "",
+        departureTime: cols[6] || "",
+        departureIATA: cols[8] || "",
+        parkPosition: cols[9] || "",
+        specialNotes: cols[11] || "",
+      } satisfies FlightPlanEntry;
+    })
+    .filter((entry) => entry.departureCode || entry.departureIATA);
 };
 
 const getVisibleServiceNotes = (notes?: string | null) => {
@@ -97,7 +199,7 @@ const splitDateTimeParts = (value: string, timezone: string) => {
   return [dateParts, timeParts];
 };
 
-Deno.serve(async (request) => {
+Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -125,16 +227,12 @@ Deno.serve(async (request) => {
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
     const [
-      { data: flightPlans, error: flightError },
+      flightPlans,
       { data: serviceRows, error: serviceError },
       { data: wheelchairRows, error: wheelchairError },
       { data: handoverLogs, error: handoverError },
     ] = await Promise.all([
-      supabaseAdmin
-        .from("flight_plans")
-        .select("*")
-        .eq("is_departure", true)
-        .order("departure_time", { ascending: true }),
+      fetchFlightPlanEntries(),
       supabaseAdmin
         .from("wheelchair_services")
         .select("*")
@@ -151,8 +249,8 @@ Deno.serve(async (request) => {
         .order("created_at", { ascending: false }),
     ]);
 
-    if (flightError || serviceError || wheelchairError || handoverError) {
-      throw flightError || serviceError || wheelchairError || handoverError;
+    if (serviceError || wheelchairError || handoverError) {
+      throw serviceError || wheelchairError || handoverError;
     }
 
     const flightLookup = new Map<string, FlightPlanEntry>();
@@ -173,10 +271,10 @@ Deno.serve(async (request) => {
         gate: entry.parkPosition || "",
         plannedPosition: entry.parkPosition || "",
       }))
-      .filter((row) => row.destination !== "");
+      .filter((row: { destination: string }) => row.destination !== "");
 
     const specialServices = (serviceRows || [])
-      .map((service) => {
+      .map((service: ServiceRow) => {
         const visibleNotes = getVisibleServiceNotes(service.notes);
         const matchedEntry = getFlightCodeMatchKeys(service.flight_iata || "")
           .map((key) => flightLookup.get(key))
@@ -200,7 +298,7 @@ Deno.serve(async (request) => {
       });
 
     const inventoryByTerminal = new Map<string, { available: number; missing: number; maintenance: number }>();
-    (wheelchairRows || []).forEach((row) => {
+    (wheelchairRows || []).forEach((row: WheelchairRow) => {
       const terminal = (row.terminal || "GENEL").trim() || "GENEL";
       const current = inventoryByTerminal.get(terminal) || { available: 0, missing: 0, maintenance: 0 };
       if (row.status === "missing") {
@@ -223,7 +321,7 @@ Deno.serve(async (request) => {
         maintenance: counts.maintenance,
       }));
 
-    const handovers = (handoverLogs || []).map((log) => {
+    const handovers = (handoverLogs || []).map((log: HandoverLogRow) => {
       const details = log.details || "";
       const [transitionPart = "", snapshot = "", checklist = ""] = details.split(" | ");
       const transitionMatch = transitionPart.match(/^(.*?) → (.*?) \((.*?)\)$/);
