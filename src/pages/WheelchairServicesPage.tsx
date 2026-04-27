@@ -446,6 +446,7 @@ const WheelchairServicesPage = () => {
       });
 
       fetchServices();
+      void fetchFlights(true);
       setShowServiceDialog(false);
     } catch (error: any) {
       toast.error("Hizmet eklenemedi: " + error.message);

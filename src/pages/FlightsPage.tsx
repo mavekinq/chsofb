@@ -32,6 +32,8 @@ const FlightsPage = () => {
       }
     };
     fetchFlights();
+    const interval = window.setInterval(() => { void fetchFlights(); }, 60000);
+    return () => window.clearInterval(interval);
   }, []);
 
   const filtered = flights.filter((f) =>

@@ -260,7 +260,7 @@ const MainMenu = () => {
       .subscribe();
     const flightRefreshTimer = window.setInterval(() => {
       void loadDashboardSummary();
-    }, 300000);
+    }, 60000);
 
     return () => {
       cancelled = true;
