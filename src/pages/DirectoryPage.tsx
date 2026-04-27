@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Phone, Search, User, Building2, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ArrowLeft, Phone, Search, User, Building2, ChevronDown, ChevronRight, Loader2, PlusCircle, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -51,12 +51,22 @@ const PALETTE = [
   "bg-teal-500/15 text-teal-400 border-teal-500/30",
 ];
 
+const STORAGE_KEY = "celebi_added_phones";
+
 const DirectoryPage = () => {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [collapsedDepts, setCollapsedDepts] = useState<Set<string>>(new Set());
+  // manually added phones: name -> phone
+  const [addedPhones, setAddedPhones] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}"); } catch { return {}; }
+  });
+  // inline editing state: which contact is being edited
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     Promise.all([
@@ -77,6 +87,14 @@ const DirectoryPage = () => {
           const team = teamMap.get(c.name.toUpperCase());
           if (team !== undefined) {
             merged.push({ ...c, team });
+          }
+        }
+        // Also add personnel not in directory.csv (no phone, no position)
+        for (const p of personnel) {
+          const nameUp = p.name.toUpperCase();
+          const alreadyIn = merged.some((m) => m.name.toUpperCase() === nameUp);
+          if (!alreadyIn) {
+            merged.push({ name: p.name, position: "", phone: "", team: p.team || "Diğer" });
           }
         }
         merged.sort((a, b) => a.name.localeCompare(b.name, "tr"));
@@ -124,6 +142,23 @@ const DirectoryPage = () => {
       return next;
     });
   };
+
+  const startEdit = (name: string, current: string) => {
+    setEditingName(name);
+    setEditValue(current);
+    setTimeout(() => editInputRef.current?.focus(), 50);
+  };
+
+  const saveEdit = (name: string) => {
+    const val = editValue.trim();
+    const updated = { ...addedPhones, [name]: val };
+    if (!val) delete updated[name];
+    setAddedPhones(updated);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    setEditingName(null);
+  };
+
+  const cancelEdit = () => setEditingName(null);
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.15),transparent_34%),hsl(var(--background))]">
@@ -191,7 +226,10 @@ const DirectoryPage = () => {
 
                 {!isCollapsed && (
                   <div className="divide-y divide-border/60">
-                    {teamContacts.map((contact, idx) => (
+                    {teamContacts.map((contact, idx) => {
+                      const effectivePhone = contact.phone || addedPhones[contact.name] || "";
+                      const isEditing = editingName === contact.name;
+                      return (
                       <div key={idx} className="flex items-center gap-3 px-4 py-3.5">
                         <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
                           <span className="text-sm font-semibold text-primary">
@@ -200,24 +238,57 @@ const DirectoryPage = () => {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate leading-tight">{contact.name}</p>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">{contact.position}</p>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">{contact.position || <span className="italic opacity-50">—</span>}</p>
                         </div>
-                        {contact.phone ? (
-                          <a
-                            href={`tel:${contact.phone}`}
-                            className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/25 hover:bg-emerald-500/20 active:scale-95 transition-all px-3 py-2 shrink-0"
-                            aria-label={`${contact.name} ara`}
-                          >
-                            <Phone className="w-4 h-4 text-emerald-400" />
-                            <span className="text-xs font-mono text-emerald-400 hidden sm:inline">
-                              {contact.phone}
-                            </span>
-                          </a>
+
+                        {/* Phone area */}
+                        {isEditing ? (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <input
+                              ref={editInputRef}
+                              type="tel"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") saveEdit(contact.name); if (e.key === "Escape") cancelEdit(); }}
+                              className="w-36 text-xs font-mono rounded-lg border border-primary/40 bg-background/80 px-2 py-1.5 outline-none focus:border-primary"
+                              placeholder="05XX XXX XX XX"
+                            />
+                            <button onClick={() => saveEdit(contact.name)} className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/10">
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button onClick={cancelEdit} className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : effectivePhone ? (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <a
+                              href={`tel:${effectivePhone}`}
+                              className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/25 hover:bg-emerald-500/20 active:scale-95 transition-all px-3 py-2"
+                              aria-label={`${contact.name} ara`}
+                            >
+                              <Phone className="w-4 h-4 text-emerald-400" />
+                              <span className="text-xs font-mono text-emerald-400 hidden sm:inline">{effectivePhone}</span>
+                            </a>
+                            {/* Edit button for manually added phones */}
+                            {!contact.phone && (
+                              <button onClick={() => startEdit(contact.name, effectivePhone)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted/60" title="Düzenle">
+                                <PlusCircle className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground/50 px-3 py-2 shrink-0">—</span>
+                          <button
+                            onClick={() => startEdit(contact.name, "")}
+                            className="flex items-center gap-1.5 rounded-xl border border-dashed border-border hover:border-primary/50 hover:bg-primary/5 text-muted-foreground hover:text-primary transition-all px-3 py-2 shrink-0"
+                          >
+                            <PlusCircle className="w-4 h-4" />
+                            <span className="text-xs hidden sm:inline">Numara ekle</span>
+                          </button>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </section>
