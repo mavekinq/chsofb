@@ -9,6 +9,9 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "supabase:functions:list": "node scripts/supabase-functions.mjs list",
+    "supabase:functions:deploy": "node scripts/supabase-functions.mjs deploy",
+    "supabase:functions:deploy:all": "node scripts/supabase-functions.mjs deploy all",
     "test": "vitest run",
     "test:watch": "vitest",
     "import:schedule": "node scripts/import-work-schedule.mjs"
