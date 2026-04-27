@@ -137,7 +137,11 @@ const WorkSchedulePage = () => {
   const minuteNow = getMinuteOfDay(now);
 
   const todayIndex = payload.weekDates.indexOf(todayKey);
-  const previousDayKey = todayIndex > 0 ? payload.weekDates[todayIndex - 1] : null;
+  const previousDayKey = (() => {
+    if (todayIndex <= 0) return null;
+    const candidate = payload.weekDates[todayIndex - 1];
+    return candidate && candidate < todayKey ? candidate : null;
+  })();
 
   useEffect(() => {
     if (!payload.weekDates.includes(selectedDate)) {
