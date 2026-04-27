@@ -165,7 +165,7 @@ const WorkSchedulePage = () => {
     }
 
     return result.sort((a, b) => a.team.localeCompare(b.team, "tr") || a.name.localeCompare(b.name, "tr"));
-  }, [minuteNow, previousDayKey, todayIndex, todayKey]);
+  }, [minuteNow, payload.employees, previousDayKey, todayIndex, todayKey]);
 
   const groupedByTeam = useMemo(() => {
     const map = new Map<string, Array<{ name: string; shift: string; source: "today" | "previous" }>>();
@@ -202,7 +202,7 @@ const WorkSchedulePage = () => {
     }
 
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], "tr"));
-  }, [query, selectedDate]);
+  }, [payload.employees, query, selectedDate]);
 
   const selectedDayCount = useMemo(
     () => selectedDayGrouped.reduce((sum, [, people]) => sum + people.length, 0),
@@ -226,7 +226,7 @@ const WorkSchedulePage = () => {
     }
 
     return { scheduledShiftCount };
-  }, [todayKey]);
+  }, [payload.employees, payload.weekDates, todayKey]);
 
   return (
     <div className="min-h-screen bg-background">
