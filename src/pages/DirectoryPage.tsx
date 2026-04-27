@@ -9,9 +9,12 @@ type Contact = {
   name: string;
   position: string;
   phone: string;
+  team: string;
 };
 
-function parseCsv(text: string): Contact[] {
+type PersonnelRow = { name: string; team: string };
+
+function parseDirectoryCsv(text: string): Omit<Contact, "team">[] {
   const lines = text.split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) return [];
   return lines.slice(1).map((line) => {
@@ -24,26 +27,29 @@ function parseCsv(text: string): Contact[] {
   });
 }
 
-function getDepartment(position: string): string {
-  const p = position.toLowerCase();
-  if (p.includes("müdür") || p.includes("direktör") || p.includes("koordinatör")) return "Yönetim";
-  if (p.includes("şef")) return "Şefler";
-  if (p.includes("memur")) return "Memurlar";
-  if (p.includes("özel hizmet") || p.includes("wheelchair") || p.includes("erişilebilir")) return "Özel Hizmetler";
-  if (p.includes("işçi") || p.includes("kontuar")) return "Saha Personeli";
-  return "Diğer";
+function parsePersonnelCsv(text: string): PersonnelRow[] {
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+  return lines.slice(1).map((line) => {
+    const parts = line.split(",");
+    return {
+      name: (parts[0] ?? "").trim(),
+      team: (parts[1] ?? "").trim(),
+    };
+  });
 }
 
-const DEPT_ORDER = ["Yönetim", "Şefler", "Memurlar", "Özel Hizmetler", "Saha Personeli", "Diğer"];
-
-const deptColor: Record<string, string> = {
-  Yönetim: "bg-violet-500/15 text-violet-400 border-violet-500/30",
-  Şefler: "bg-sky-500/15 text-sky-400 border-sky-500/30",
-  Memurlar: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  "Özel Hizmetler": "bg-rose-500/15 text-rose-400 border-rose-500/30",
-  "Saha Personeli": "bg-amber-500/15 text-amber-400 border-amber-500/30",
-  Diğer: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
-};
+// Palette cycling for team badges
+const PALETTE = [
+  "bg-sky-500/15 text-sky-400 border-sky-500/30",
+  "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  "bg-violet-500/15 text-violet-400 border-violet-500/30",
+  "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  "bg-rose-500/15 text-rose-400 border-rose-500/30",
+  "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
+  "bg-orange-500/15 text-orange-400 border-orange-500/30",
+  "bg-teal-500/15 text-teal-400 border-teal-500/30",
+];
 
 const DirectoryPage = () => {
   const navigate = useNavigate();
@@ -53,9 +59,29 @@ const DirectoryPage = () => {
   const [collapsedDepts, setCollapsedDepts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetch("/directory.csv")
-      .then((r) => r.text())
-      .then((text) => setContacts(parseCsv(text)))
+    Promise.all([
+      fetch("/directory.csv").then((r) => r.text()),
+      fetch("/personnel.csv").then((r) => r.text()),
+    ])
+      .then(([dirText, perText]) => {
+        const dirContacts = parseDirectoryCsv(dirText);
+        const personnel = parsePersonnelCsv(perText);
+        // Build lookup: UPPERCASE name -> team
+        const teamMap = new Map<string, string>();
+        for (const p of personnel) {
+          teamMap.set(p.name.toUpperCase(), p.team || "Diğer");
+        }
+        // Only keep contacts that exist in the shift schedule
+        const merged: Contact[] = [];
+        for (const c of dirContacts) {
+          const team = teamMap.get(c.name.toUpperCase());
+          if (team !== undefined) {
+            merged.push({ ...c, team });
+          }
+        }
+        merged.sort((a, b) => a.name.localeCompare(b.name, "tr"));
+        setContacts(merged);
+      })
       .catch(() => setContacts([]))
       .finally(() => setLoading(false));
   }, []);
@@ -67,27 +93,29 @@ const DirectoryPage = () => {
       (c) =>
         c.name.toLowerCase().includes(q) ||
         c.position.toLowerCase().includes(q) ||
+        c.team.toLowerCase().includes(q) ||
         c.phone.includes(q),
     );
   }, [query, contacts]);
 
+  // Group by team from personnel.csv
   const grouped = useMemo(() => {
     const map = new Map<string, Contact[]>();
     for (const c of filtered) {
-      const dept = getDepartment(c.position);
-      const arr = map.get(dept) ?? [];
+      const arr = map.get(c.team) ?? [];
       arr.push(c);
-      map.set(dept, arr);
+      map.set(c.team, arr);
     }
-    return Array.from(map.entries()).sort(([a], [b]) => {
-      const ia = DEPT_ORDER.indexOf(a);
-      const ib = DEPT_ORDER.indexOf(b);
-      if (ia !== -1 && ib !== -1) return ia - ib;
-      if (ia !== -1) return -1;
-      if (ib !== -1) return 1;
-      return a.localeCompare(b, "tr");
-    });
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b, "tr"));
   }, [filtered]);
+
+  // Assign consistent color per team name
+  const teamColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    const teams = Array.from(new Set(contacts.map((c) => c.team))).sort((a, b) => a.localeCompare(b, "tr"));
+    teams.forEach((t, i) => map.set(t, PALETTE[i % PALETTE.length]));
+    return map;
+  }, [contacts]);
 
   const toggleDept = (dept: string) => {
     setCollapsedDepts((prev) => {
@@ -110,8 +138,7 @@ const DirectoryPage = () => {
           </div>
           <span className="ml-auto text-xs text-muted-foreground shrink-0">
             {loading ? "Yükleniyor..." : `${contacts.length} kişi`}
-          </span>
-        </div>
+          </span>        </div>
       </header>
 
       <main className="container px-4 py-5 space-y-4 max-w-2xl">
@@ -142,19 +169,19 @@ const DirectoryPage = () => {
         )}
 
         {!loading &&
-          grouped.map(([dept, deptContacts]) => {
-            const isCollapsed = collapsedDepts.has(dept);
-            const colorClass = deptColor[dept] ?? "bg-zinc-500/15 text-zinc-400 border-zinc-500/30";
+          grouped.map(([team, teamContacts]) => {
+            const isCollapsed = collapsedDepts.has(team);
+            const colorClass = teamColorMap.get(team) ?? "bg-zinc-500/15 text-zinc-400 border-zinc-500/30";
             return (
-              <section key={dept} className="rounded-2xl border border-border bg-card/60 overflow-hidden">
+              <section key={team} className="rounded-2xl border border-border bg-card/60 overflow-hidden">
                 <button
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors"
-                  onClick={() => toggleDept(dept)}
+                  onClick={() => toggleDept(team)}
                 >
                   <Badge variant="outline" className={`text-xs shrink-0 ${colorClass}`}>
-                    {dept}
+                    {team}
                   </Badge>
-                  <span className="text-xs text-muted-foreground ml-auto">{deptContacts.length} kişi</span>
+                  <span className="text-xs text-muted-foreground ml-auto">{teamContacts.length} kişi</span>
                   {isCollapsed ? (
                     <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                   ) : (
@@ -164,7 +191,7 @@ const DirectoryPage = () => {
 
                 {!isCollapsed && (
                   <div className="divide-y divide-border/60">
-                    {deptContacts.map((contact, idx) => (
+                    {teamContacts.map((contact, idx) => (
                       <div key={idx} className="flex items-center gap-3 px-4 py-3.5">
                         <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
                           <span className="text-sm font-semibold text-primary">
