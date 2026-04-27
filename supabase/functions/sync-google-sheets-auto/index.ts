@@ -253,8 +253,10 @@ Deno.serve(async (request: Request) => {
       throw serviceError || wheelchairError || handoverError;
     }
 
+    const departureFlightEntries = (flightPlans || []).filter((entry: FlightPlanEntry) => Boolean(entry.departureCode));
+
     const flightLookup = new Map<string, FlightPlanEntry>();
-    (flightPlans || []).forEach((entry: FlightPlanEntry) => {
+    departureFlightEntries.forEach((entry: FlightPlanEntry) => {
       getFlightCodeMatchKeys(entry.departureCode).forEach((key) => {
         if (!flightLookup.has(key)) {
           flightLookup.set(key, entry);
@@ -262,7 +264,7 @@ Deno.serve(async (request: Request) => {
       });
     });
 
-    const departures = (flightPlans || [])
+    const departures = departureFlightEntries
       .map((entry: FlightPlanEntry) => ({
         departureTime: entry.departureTime || "",
         airline: extractAirlineCodeFromFlightCode(entry.departureCode),
