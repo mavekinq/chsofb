@@ -379,6 +379,10 @@ const MainMenu = () => {
                       <CalendarDays className="h-4 w-4" />
                       Vardiya Planı
                     </Button>
+                    <Button variant="outline" className="gap-2" onClick={() => navigate("/flights")}>
+                      <Plane className="h-4 w-4" />
+                      Uçuşlar
+                    </Button>
                   </div>
                 </div>
 
