@@ -188,6 +188,30 @@ export type Database = {
         }
         Relationships: []
       }
+      work_schedule_history: {
+        Row: {
+          id: string
+          title: string
+          week_range: string
+          payload: Json
+          uploaded_at: string
+        }
+        Insert: {
+          id?: string
+          title?: string
+          week_range?: string
+          payload: Json
+          uploaded_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          week_range?: string
+          payload?: Json
+          uploaded_at?: string
+        }
+        Relationships: []
+      }
       work_schedule_state: {
         Row: {
           id: string

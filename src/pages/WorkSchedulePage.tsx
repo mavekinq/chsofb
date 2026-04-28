@@ -2,14 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, History, RotateCcw } from "lucide-react";
 import {
   getStoredSchedulePayload,
   isCustomSchedulePayload,
+  loadScheduleHistory,
   loadSchedulePayload,
+  saveSchedulePayload,
+  type ScheduleHistoryItem,
   type SchedulePayload,
   WORK_SCHEDULE_UPDATED_EVENT,
 } from "@/lib/work-schedule";
+import { toast } from "sonner";
 
 const SHIFT_PATTERN = /^(\d{2})(\d{2})-(\d{2})(\d{2})$/;
 
@@ -84,6 +88,9 @@ const WorkSchedulePage = () => {
     const initialTodayKey = `${initialNow.getFullYear()}-${String(initialNow.getMonth() + 1).padStart(2, "0")}-${String(initialNow.getDate()).padStart(2, "0")}`;
     return getPreferredSelectedDate(initialPayload.weekDates, initialTodayKey);
   });
+  const [historyItems, setHistoryItems] = useState<ScheduleHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60000);
@@ -240,9 +247,28 @@ const WorkSchedulePage = () => {
             <CalendarDays className="w-5 h-5 text-primary" />
             <h1 className="font-heading font-semibold">Calisma Programi</h1>
           </div>
-          <Button variant="outline" size="sm" onClick={() => navigate("/")}>
-            Panoya Don
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={showHistory ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => {
+                setShowHistory((prev) => !prev);
+                if (!showHistory && historyItems.length === 0) {
+                  setHistoryLoading(true);
+                  void loadScheduleHistory().then((items) => {
+                    setHistoryItems(items);
+                    setHistoryLoading(false);
+                  });
+                }
+              }}
+            >
+              <History className="w-4 h-4 mr-1" />
+              Gecmis Programlar
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/")}>
+              Panoya Don
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -383,6 +409,53 @@ const WorkSchedulePage = () => {
           </div>
         )}
       </main>
+
+      {/* Gecmis Programlar Panel */}
+      {showHistory && (
+        <div className="fixed inset-y-0 right-0 z-50 w-full max-w-sm border-l border-border bg-card shadow-xl flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-border">
+            <h2 className="font-heading font-semibold flex items-center gap-2">
+              <History className="w-4 h-4 text-primary" />
+              Gecmis Calisma Programlari
+            </h2>
+            <Button variant="ghost" size="sm" onClick={() => setShowHistory(false)}>✕</Button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {historyLoading ? (
+              <p className="text-sm text-muted-foreground">Yukluyor...</p>
+            ) : historyItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Henuz gecmis program kaydedilmemis.</p>
+            ) : (
+              historyItems.map((item) => (
+                <div key={item.id} className="rounded-lg border border-border bg-background p-3 space-y-1">
+                  <p className="font-medium text-sm">{item.title || "Isimsiz Program"}</p>
+                  <p className="text-xs text-muted-foreground">{item.week_range}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(item.uploaded_at).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })} tarihinde eklendi
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full mt-1 gap-1"
+                    onClick={async () => {
+                      try {
+                        await saveSchedulePayload(item.payload);
+                        toast.success(`${item.title || "Program"} geri yuklendi`);
+                        setShowHistory(false);
+                      } catch {
+                        toast.error("Program geri yuklenemedi");
+                      }
+                    }}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Bu Programi Ac
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

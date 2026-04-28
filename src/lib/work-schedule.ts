@@ -122,6 +122,29 @@ export const loadSchedulePayload = async () => {
 };
 
 export const saveSchedulePayload = async (payload: SchedulePayload) => {
+  // Archive current schedule to history before overwriting
+  try {
+    const { data: current } = await supabase
+      .from(REMOTE_TABLE)
+      .select("payload")
+      .eq("id", REMOTE_ROW_ID)
+      .maybeSingle();
+
+    if (current && isRecord(current) && isValidSchedulePayload(current.payload)) {
+      const old = current.payload as SchedulePayload;
+      const weekRange = old.weekDates.length > 0
+        ? `${old.weekDates[0]} / ${old.weekDates[old.weekDates.length - 1]}`
+        : "";
+      await supabase.from("work_schedule_history").insert({
+        title: old.title || "",
+        week_range: weekRange,
+        payload: old as unknown as Json,
+      });
+    }
+  } catch {
+    // History insert failing should not block the main save
+  }
+
   writeLocalSchedulePayload(payload);
   dispatchScheduleUpdated(payload);
 
@@ -136,6 +159,34 @@ export const saveSchedulePayload = async (payload: SchedulePayload) => {
   if (error) {
     throw error;
   }
+};
+
+export type ScheduleHistoryItem = {
+  id: string;
+  title: string;
+  week_range: string;
+  uploaded_at: string;
+  payload: SchedulePayload;
+};
+
+export const loadScheduleHistory = async (): Promise<ScheduleHistoryItem[]> => {
+  const { data, error } = await supabase
+    .from("work_schedule_history")
+    .select("id, title, week_range, payload, uploaded_at")
+    .order("uploaded_at", { ascending: false })
+    .limit(20);
+
+  if (error || !data) return [];
+
+  return data
+    .filter((row) => isValidSchedulePayload(row.payload))
+    .map((row) => ({
+      id: row.id,
+      title: row.title,
+      week_range: row.week_range,
+      uploaded_at: row.uploaded_at,
+      payload: row.payload as unknown as SchedulePayload,
+    }));
 };
 
 export const clearStoredSchedulePayload = async () => {
