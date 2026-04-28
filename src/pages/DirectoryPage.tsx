@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
 
 type PersonnelRow = {
   name: string;
@@ -14,7 +15,6 @@ type PersonnelRow = {
 
 const SHIFT_FILES = ["/shifts/week16.xlsx", "/shifts/week17.xlsx", "/shifts/week18.xlsx"];
 const DIRECTORY_FILE = "/rehber.xlsx";
-const STORAGE_KEY = "directory-manual-phones";
 
 const TEAM_REGEX = /Team:\s*\d+\s*-\s*(.+)/i;
 const SUFFIX_REGEX = /\s*-\s*[A-Z0-9ÇĞİÖŞÜÇĞİÖŞÜ]+B?\s*$/u;
@@ -76,7 +76,7 @@ function looksLikePhone(value: string): boolean {
   if (!trimmed) return false;
   if (trimmed.includes("@")) return false;
   const digits = trimmed.replace(/\D/g, "");
-  return digits.length >= 3;
+  return digits.length >= 10;
 }
 
 function parseDirectoryWorkbook(arrayBuffer: ArrayBuffer): Map<string, string> {
@@ -152,7 +152,7 @@ function parseDirectoryWorkbook(arrayBuffer: ArrayBuffer): Map<string, string> {
         .filter(Boolean);
 
       const primary = pickBestPhone(phoneValues, commRaw);
-      const fallback = /^\d+$/.test(systemNo) ? { phone: systemNo, score: 10 } : null;
+      const fallback = null;
       const best = primary ?? fallback;
 
       if (!best) continue;
@@ -177,13 +177,7 @@ const DirectoryPage = () => {
   const [personnel, setPersonnel] = useState<PersonnelRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [collapsedTeams, setCollapsedTeams] = useState<Set<string>>(new Set());
-  const [manualPhones, setManualPhones] = useState<Record<string, string>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
-    } catch {
-      return {};
-    }
-  });
+  const [manualPhones, setManualPhones] = useState<Record<string, string>>({});
   const [editingName, setEditingName] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -197,6 +191,7 @@ const DirectoryPage = () => {
         const shiftBuffers = await Promise.all(shiftResponses.map((r) => r.arrayBuffer()));
         const directoryBuffer = await fetch(DIRECTORY_FILE).then((r) => r.arrayBuffer());
         const phoneMap = parseDirectoryWorkbook(directoryBuffer);
+        const sharedPhonesResp = await supabase.from("directory_manual_phones").select("name, phone");
 
         const seen = new Set<string>();
         const merged: PersonnelRow[] = [];
@@ -216,6 +211,16 @@ const DirectoryPage = () => {
 
         if (isMounted) {
           setPersonnel(merged);
+
+          if (!sharedPhonesResp.error) {
+            const manual: Record<string, string> = {};
+            for (const row of sharedPhonesResp.data || []) {
+              if (row.name && row.phone) {
+                manual[row.name] = row.phone;
+              }
+            }
+            setManualPhones(manual);
+          }
         }
       } catch {
         if (isMounted) {
@@ -239,7 +244,7 @@ const DirectoryPage = () => {
     const q = query.trim().toLocaleLowerCase("tr-TR");
     if (!q) return personnel;
     return personnel.filter((p) => {
-      const phone = p.phone || manualPhones[p.name] || "";
+      const phone = manualPhones[p.name] || p.phone || "";
       return p.name.toLocaleLowerCase("tr-TR").includes(q) || p.team.toLocaleLowerCase("tr-TR").includes(q) || phone.includes(q);
     });
   }, [query, personnel, manualPhones]);
@@ -282,16 +287,31 @@ const DirectoryPage = () => {
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
-  const saveEdit = (name: string) => {
+  const saveEdit = async (name: string) => {
     const phone = editingValue.trim();
-    const next = { ...manualPhones };
     if (phone) {
-      next[name] = phone;
+      const { error } = await supabase
+        .from("directory_manual_phones")
+        .upsert({ name, phone }, { onConflict: "name" });
+
+      if (!error) {
+        setManualPhones((prev) => ({ ...prev, [name]: phone }));
+      }
     } else {
-      delete next[name];
+      const { error } = await supabase
+        .from("directory_manual_phones")
+        .delete()
+        .eq("name", name);
+
+      if (!error) {
+        setManualPhones((prev) => {
+          const next = { ...prev };
+          delete next[name];
+          return next;
+        });
+      }
     }
-    setManualPhones(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+
     setEditingName(null);
   };
 
@@ -363,7 +383,7 @@ const DirectoryPage = () => {
                 {!isCollapsed && (
                   <div className="divide-y divide-border/60">
                     {members.map((person) => {
-                      const phone = person.phone || manualPhones[person.name] || "";
+                      const phone = manualPhones[person.name] || person.phone || "";
                       const editing = editingName === person.name;
                       return (
                       <div key={person.name} className="flex items-center gap-3 px-4 py-3">

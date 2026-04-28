@@ -71,6 +71,24 @@ export type Database = {
         }
         Relationships: []
       }
+      directory_manual_phones: {
+        Row: {
+          name: string
+          phone: string
+          updated_at: string
+        }
+        Insert: {
+          name: string
+          phone: string
+          updated_at?: string
+        }
+        Update: {
+          name?: string
+          phone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       shifts: {
         Row: {
           created_at: string
