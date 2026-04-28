@@ -83,7 +83,7 @@ const extractFlightNumberFromFlightCode = (value: string) => {
   return normalized.slice(airlineCode.length);
 };
 
-const parseDepartureTimestamp = (value: string) => {
+const parseDepartureMinutes = (value: string) => {
   const raw = String(value || "").trim();
   if (!raw) {
     return null;
@@ -94,10 +94,37 @@ const parseDepartureTimestamp = (value: string) => {
     return null;
   }
 
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  return hours * 60 + minutes;
+};
+
+const buildDepartureTimestamps = (entries: Array<{ departureTime: string }>) => {
   const now = new Date();
-  const parsed = new Date(now);
-  parsed.setHours(Number(match[1]), Number(match[2]), Number(match[3] || 0), 0);
-  return Math.floor(parsed.getTime() / 1000);
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayStartTs = Math.floor(dayStart.getTime() / 1000);
+
+  const timestamps: Array<number | null> = [];
+  let dayOffsetSeconds = 0;
+  let previousMinutes: number | null = null;
+
+  for (const entry of entries) {
+    const minutes = parseDepartureMinutes(entry.departureTime);
+    if (minutes === null) {
+      timestamps.push(null);
+      continue;
+    }
+
+    if (previousMinutes !== null && minutes < previousMinutes) {
+      dayOffsetSeconds += 24 * 60 * 60;
+    }
+
+    const ts = dayStartTs + minutes * 60 + dayOffsetSeconds;
+    timestamps.push(ts);
+    previousMinutes = minutes;
+  }
+
+  return timestamps;
 };
 
 const normalizeGateValue = (value?: string | null) => {
@@ -149,14 +176,15 @@ const WheelchairServicesPage = () => {
     try {
       const flightPlanEntries = await fetchFlightPlanEntries();
       const now = Date.now() / 1000;
+      const departureTimestamps = buildDepartureTimestamps(flightPlanEntries);
 
       const mappedFlights = flightPlanEntries
         .filter((entry) => Boolean(entry.departureCode))
-        .map((entry) => {
+        .map((entry, index) => {
           const flightCode = normalizeFlightCode(entry.departureCode || "");
           const airlineCode = extractAirlineCodeFromFlightCode(flightCode);
           const flightNumber = extractFlightNumberFromFlightCode(flightCode);
-          const departureTimestamp = parseDepartureTimestamp(entry.departureTime);
+          const departureTimestamp = departureTimestamps[index];
 
           return {
             airline_iata: airlineCode,
