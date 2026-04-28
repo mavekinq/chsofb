@@ -806,6 +806,15 @@ const WheelchairServicesPage = () => {
     [services, activeTab, flightLookup],
   );
 
+  const terminalServicesForFlightCard = useMemo(
+    () =>
+      services.filter((service) => {
+        if (service.terminal !== activeTab) return false;
+        return getFlightCodeMatchKeys(service.flight_iata || "").some((key) => flightLookup.has(key));
+      }),
+    [services, activeTab, flightLookup],
+  );
+
   const visibleTerminalServices = terminalServices;
 
   const terminalWheelchairs = useMemo(
@@ -837,9 +846,24 @@ const WheelchairServicesPage = () => {
     return keys.reduce((acc, key) => Math.max(acc, flightServiceCount.get(key) || 0), 0);
   };
 
+  const flightServiceCountForCard = useMemo(() => {
+    const count = new Map<string, number>();
+    terminalServicesForFlightCard.forEach((service) => {
+      getFlightCodeMatchKeys(service.flight_iata || "").forEach((key) => {
+        count.set(key, (count.get(key) || 0) + 1);
+      });
+    });
+    return count;
+  }, [terminalServicesForFlightCard]);
+
+  const getServiceCountForFlightCard = (flight: Flight) => {
+    const keys = getFlightCodeMatchKeys(flight.flight_iata || "");
+    return keys.reduce((acc, key) => Math.max(acc, flightServiceCountForCard.get(key) || 0), 0);
+  };
+
   const servicedFlightsCount = useMemo(
-    () => filteredFlights.filter((flight) => getServiceCountForFlight(flight) > 0).length,
-    [filteredFlights, flightServiceCount],
+    () => filteredFlights.filter((flight) => getServiceCountForFlightCard(flight) > 0).length,
+    [filteredFlights, flightServiceCountForCard],
   );
 
   const q = searchQuery.trim().toLocaleLowerCase("tr");
