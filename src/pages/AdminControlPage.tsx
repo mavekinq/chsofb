@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -400,6 +399,11 @@ const AdminControlPage = () => {
         .includes(query);
     });
   }, [serviceHistoryLogs, serviceSearchQuery, serviceTerminalFilter]);
+  const briefingLines = useMemo(
+    () => briefingDraft.split("\n").map((item) => item.trim()).filter(Boolean),
+    [briefingDraft],
+  );
+  const briefingPreviewLines = useMemo(() => briefingLines.slice(0, 5), [briefingLines]);
 
   const csvEscape = (value: unknown) => {
     const raw = String(value ?? "");
@@ -1380,33 +1384,61 @@ const AdminControlPage = () => {
             <div className="flex flex-wrap gap-2">
               <Button onClick={copyImportCommand}>Excel Dosyasi Sec</Button>
               <Button variant="outline" onClick={() => navigate("/work-schedule")}>Programi Ac</Button>
-              {hasCustomSchedule && (
-                <Button variant="secondary" onClick={handleResetSchedule}>Varsayilana Don</Button>
-              )}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-primary/25 bg-[linear-gradient(160deg,hsl(var(--card))_0%,hsl(var(--card))_52%,hsl(var(--primary)/0.08)_100%)] shadow-sm shadow-primary/10">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Megaphone className="w-4 h-4 text-primary" />
-              Brifing ve Duyuru Ayarlari
-            </CardTitle>
-            <CardDescription>Ana menudeki brifing alanini satir satir buradan yonet.</CardDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Megaphone className="w-4 h-4 text-primary" />
+                  Brifing ve Duyuru Ayarlari
+                </CardTitle>
+                <CardDescription>Ana menudeki brifing alanini satir satir buradan yonet.</CardDescription>
+              </div>
+              <Badge variant={customBriefingsActive ? "default" : "secondary"}>
+                {customBriefingsActive ? "Ozel Liste" : "Varsayilan"}
+              </Badge>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <Alert>
-              <Megaphone className="h-4 w-4" />
-              <AlertTitle>{customBriefingsActive ? "Ozel brifing listesi aktif" : "Varsayilan brifing listesi aktif"}</AlertTitle>
-              <AlertDescription>Her satir ana menude ayri bir duyuru olarak gosterilir.</AlertDescription>
-            </Alert>
+          <CardContent className="space-y-4">
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="rounded-xl border border-border/70 bg-background/70 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Aktif Mod</p>
+                <p className="mt-1 text-sm font-semibold">{customBriefingsActive ? "Ozel Brifing" : "Varsayilan Brifing"}</p>
+              </div>
+              <div className="rounded-xl border border-border/70 bg-background/70 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Toplam Satir</p>
+                <p className="mt-1 text-sm font-semibold">{briefingLines.length}</p>
+              </div>
+              <div className="rounded-xl border border-border/70 bg-background/70 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Yayin</p>
+                <p className="mt-1 text-sm font-semibold">Ana menu duyuru alani</p>
+              </div>
+            </div>
             <Textarea
               value={briefingDraft}
               onChange={(event) => setBriefingDraft(event.target.value)}
               placeholder="Her satira bir brifing yaz"
-              className="min-h-[180px]"
+              className="min-h-[200px] border-primary/20 bg-background/80"
             />
+            <div className="rounded-xl border border-dashed border-border/80 bg-background/60 p-3">
+              <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Canli Onizleme</p>
+              {briefingPreviewLines.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Henuz satir eklenmedi.</p>
+              ) : (
+                <div className="space-y-1.5 text-sm">
+                  {briefingPreviewLines.map((line, index) => (
+                    <p key={`${line}-${index}`} className="truncate">{index + 1}. {line}</p>
+                  ))}
+                  {briefingLines.length > briefingPreviewLines.length && (
+                    <p className="text-xs text-muted-foreground">+{briefingLines.length - briefingPreviewLines.length} satir daha</p>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="flex flex-wrap gap-2">
               <Button onClick={handleSaveBriefings}>Brifingleri Kaydet</Button>
               {customBriefingsActive && (
