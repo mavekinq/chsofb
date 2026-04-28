@@ -101,30 +101,21 @@ const parseDepartureMinutes = (value: string) => {
 
 const buildDepartureTimestamps = (entries: Array<{ departureTime: string }>) => {
   const now = new Date();
-  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const dayStartTs = Math.floor(dayStart.getTime() / 1000);
+  const nowTs = Math.floor(now.getTime() / 1000);
+  const dayStartTs = Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000);
+  const tomorrowStartTs = dayStartTs + 86400;
 
-  const timestamps: Array<number | null> = [];
-  let dayOffsetSeconds = 0;
-  let previousMinutes: number | null = null;
-
-  for (const entry of entries) {
+  return entries.map((entry) => {
     const minutes = parseDepartureMinutes(entry.departureTime);
-    if (minutes === null) {
-      timestamps.push(null);
-      continue;
+    if (minutes === null) return null;
+
+    const todayTs = dayStartTs + minutes * 60;
+    // If this time was more than 2 hours ago today, it belongs to tomorrow
+    if (todayTs < nowTs - 2 * 3600) {
+      return tomorrowStartTs + minutes * 60;
     }
-
-    if (previousMinutes !== null && minutes < previousMinutes) {
-      dayOffsetSeconds += 24 * 60 * 60;
-    }
-
-    const ts = dayStartTs + minutes * 60 + dayOffsetSeconds;
-    timestamps.push(ts);
-    previousMinutes = minutes;
-  }
-
-  return timestamps;
+    return todayTs;
+  });
 };
 
 const normalizeGateValue = (value?: string | null) => {
