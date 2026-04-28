@@ -463,8 +463,8 @@ const MainMenu = () => {
                 <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Operasyon</p>
                 <p className="mt-2 font-heading text-2xl">Hizmetler</p>
                 <div className="mt-1 grid grid-cols-2 gap-1 text-xs text-muted-foreground">
-                  <span>{summaryLoading ? "..." : dashboardSummary.activeServices} açık</span>
-                  <span>{summaryLoading ? "..." : dashboardSummary.openedServicesToday} bugün</span>
+                  <span>Açık kayıtlar</span>
+                  <span>Bugün gelen</span>
                 </div>
               </div>
               <Button size="sm" className="shrink-0" onClick={() => navigate("/wheelchair-services")}>Aç</Button>
