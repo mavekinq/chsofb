@@ -1230,59 +1230,62 @@ const AdminControlPage = () => {
         </CardContent>
       </Card>
 
-      <Card className="border-primary/20 bg-card/85 xl:col-span-2">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary" />
-            Gün Sonu ve Geçmiş İzleme
-          </CardTitle>
-          <CardDescription>Hizmet geçmişi, devirler ve son işlemler tek yüzeyde.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium">Son Devirler</p>
-              <Badge variant="secondary">{recentHandovers.length}</Badge>
-            </div>
-            {recentHandovers.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Henüz vardiya devri kaydı yok.</div>
-            ) : (
-              <div className="space-y-2">
-                {recentHandovers.slice(0, 5).map((handover) => (
-                  <div key={handover.id} className="rounded-xl border border-border bg-background/60 p-3">
-                    <p className="font-medium">{handover.fromStaff} → {handover.toStaff}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{handover.terminal} • {formatDateTime(handover.createdAt)}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium">Son İşlemler</p>
-              <Button type="button" variant="outline" size="sm" onClick={handleExportRecentLogsCsv}>CSV</Button>
-            </div>
-            {recentLogs.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Henüz işlem kaydı yok.</div>
-            ) : (
-              <div className="space-y-2">
-                {recentLogs.slice(0, 6).map((log) => (
-                  <div key={log.id} className="rounded-xl border border-border bg-background/60 p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <Badge variant={getActionBadgeVariant(log.action)}>{log.action}</Badge>
-                      <span className="text-xs text-muted-foreground">{formatDateTime(log.created_at)}</span>
-                    </div>
-                    <p className="mt-2 text-sm text-foreground">{log.wheelchair_id}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{log.details}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
     </div>
+  );
+
+  const dayEndHistorySection = (
+    <Card className="border-primary/20 bg-card/85">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-primary" />
+          Gün Sonu ve Geçmiş İzleme
+        </CardTitle>
+        <CardDescription>Hizmet geçmişi, devirler ve son işlemler tek yüzeyde.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium">Son Devirler</p>
+            <Badge variant="secondary">{recentHandovers.length}</Badge>
+          </div>
+          {recentHandovers.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Henüz vardiya devri kaydı yok.</div>
+          ) : (
+            <div className="space-y-2">
+              {recentHandovers.slice(0, 5).map((handover) => (
+                <div key={handover.id} className="rounded-xl border border-border bg-background/60 p-3">
+                  <p className="font-medium">{handover.fromStaff} → {handover.toStaff}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{handover.terminal} • {formatDateTime(handover.createdAt)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium">Son İşlemler</p>
+            <Button type="button" variant="outline" size="sm" onClick={handleExportRecentLogsCsv}>CSV</Button>
+          </div>
+          {recentLogs.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Henüz işlem kaydı yok.</div>
+          ) : (
+            <div className="space-y-2">
+              {recentLogs.slice(0, 6).map((log) => (
+                <div key={log.id} className="rounded-xl border border-border bg-background/60 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge variant={getActionBadgeVariant(log.action)}>{log.action}</Badge>
+                    <span className="text-xs text-muted-foreground">{formatDateTime(log.created_at)}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-foreground">{log.wheelchair_id}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{log.details}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 
   const managementSection = (
@@ -1360,94 +1363,97 @@ const AdminControlPage = () => {
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <DatabaseZap className="w-4 h-4 text-primary" />
-              Haftalik Calisma Programini Guncelle
-            </CardTitle>
-            <CardDescription>Yeni `.xlsx` veya JSON yuklediginde mevcut tarihler korunur, dosyadaki yeni tarihler programa eklenir.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json,.json"
-              className="hidden"
-              onChange={handleScheduleUpload}
-            />
-            <div className="rounded-md border border-border bg-secondary/40 p-3 text-sm">
-              <p className="text-xs text-muted-foreground mb-1">Yuklu hafta</p>
-              <p className="font-medium">{currentWeekLabel}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={copyImportCommand}>Excel Dosyasi Sec</Button>
-              <Button variant="outline" onClick={() => navigate("/work-schedule")}>Programi Ac</Button>
-            </div>
-          </CardContent>
-        </Card>
+    </div>
+  );
 
-        <Card className="border-primary/25 bg-[linear-gradient(160deg,hsl(var(--card))_0%,hsl(var(--card))_52%,hsl(var(--primary)/0.08)_100%)] shadow-sm shadow-primary/10">
-          <CardHeader>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Megaphone className="w-4 h-4 text-primary" />
-                  Brifing ve Duyuru Ayarlari
-                </CardTitle>
-                <CardDescription>Ana menudeki brifing alanini satir satir buradan yonet.</CardDescription>
-              </div>
-              <Badge variant={customBriefingsActive ? "default" : "secondary"}>
-                {customBriefingsActive ? "Ozel Liste" : "Varsayilan"}
-              </Badge>
+  const scheduleAndBriefingSection = (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <DatabaseZap className="w-4 h-4 text-primary" />
+            Haftalik Calisma Programini Guncelle
+          </CardTitle>
+          <CardDescription>Yeni `.xlsx` veya JSON yuklediginde mevcut tarihler korunur, dosyadaki yeni tarihler programa eklenir.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json,.json"
+            className="hidden"
+            onChange={handleScheduleUpload}
+          />
+          <div className="rounded-md border border-border bg-secondary/40 p-3 text-sm">
+            <p className="text-xs text-muted-foreground mb-1">Yuklu hafta</p>
+            <p className="font-medium">{currentWeekLabel}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={copyImportCommand}>Excel Dosyasi Sec</Button>
+            <Button variant="outline" onClick={() => navigate("/work-schedule")}>Programi Ac</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-primary/25 bg-[linear-gradient(160deg,hsl(var(--card))_0%,hsl(var(--card))_52%,hsl(var(--primary)/0.08)_100%)] shadow-sm shadow-primary/10">
+        <CardHeader>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Megaphone className="w-4 h-4 text-primary" />
+                Brifing ve Duyuru Ayarlari
+              </CardTitle>
+              <CardDescription>Ana menudeki brifing alanini satir satir buradan yonet.</CardDescription>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-2 sm:grid-cols-3">
-              <div className="rounded-xl border border-border/70 bg-background/70 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Aktif Mod</p>
-                <p className="mt-1 text-sm font-semibold">{customBriefingsActive ? "Ozel Brifing" : "Varsayilan Brifing"}</p>
-              </div>
-              <div className="rounded-xl border border-border/70 bg-background/70 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Toplam Satir</p>
-                <p className="mt-1 text-sm font-semibold">{briefingLines.length}</p>
-              </div>
-              <div className="rounded-xl border border-border/70 bg-background/70 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Yayin</p>
-                <p className="mt-1 text-sm font-semibold">Ana menu duyuru alani</p>
-              </div>
+            <Badge variant={customBriefingsActive ? "default" : "secondary"}>
+              {customBriefingsActive ? "Ozel Liste" : "Varsayilan"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="rounded-xl border border-border/70 bg-background/70 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Aktif Mod</p>
+              <p className="mt-1 text-sm font-semibold">{customBriefingsActive ? "Ozel Brifing" : "Varsayilan Brifing"}</p>
             </div>
-            <Textarea
-              value={briefingDraft}
-              onChange={(event) => setBriefingDraft(event.target.value)}
-              placeholder="Her satira bir brifing yaz"
-              className="min-h-[200px] border-primary/20 bg-background/80"
-            />
-            <div className="rounded-xl border border-dashed border-border/80 bg-background/60 p-3">
-              <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Canli Onizleme</p>
-              {briefingPreviewLines.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Henuz satir eklenmedi.</p>
-              ) : (
-                <div className="space-y-1.5 text-sm">
-                  {briefingPreviewLines.map((line, index) => (
-                    <p key={`${line}-${index}`} className="truncate">{index + 1}. {line}</p>
-                  ))}
-                  {briefingLines.length > briefingPreviewLines.length && (
-                    <p className="text-xs text-muted-foreground">+{briefingLines.length - briefingPreviewLines.length} satir daha</p>
-                  )}
-                </div>
-              )}
+            <div className="rounded-xl border border-border/70 bg-background/70 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Toplam Satir</p>
+              <p className="mt-1 text-sm font-semibold">{briefingLines.length}</p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={handleSaveBriefings}>Brifingleri Kaydet</Button>
-              {customBriefingsActive && (
-                <Button variant="secondary" onClick={handleResetBriefings}>Varsayilana Don</Button>
-              )}
+            <div className="rounded-xl border border-border/70 bg-background/70 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Yayin</p>
+              <p className="mt-1 text-sm font-semibold">Ana menu duyuru alani</p>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+          <Textarea
+            value={briefingDraft}
+            onChange={(event) => setBriefingDraft(event.target.value)}
+            placeholder="Her satira bir brifing yaz"
+            className="min-h-[200px] border-primary/20 bg-background/80"
+          />
+          <div className="rounded-xl border border-dashed border-border/80 bg-background/60 p-3">
+            <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Canli Onizleme</p>
+            {briefingPreviewLines.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Henuz satir eklenmedi.</p>
+            ) : (
+              <div className="space-y-1.5 text-sm">
+                {briefingPreviewLines.map((line, index) => (
+                  <p key={`${line}-${index}`} className="truncate">{index + 1}. {line}</p>
+                ))}
+                {briefingLines.length > briefingPreviewLines.length && (
+                  <p className="text-xs text-muted-foreground">+{briefingLines.length - briefingPreviewLines.length} satir daha</p>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleSaveBriefings}>Brifingleri Kaydet</Button>
+            {customBriefingsActive && (
+              <Button variant="secondary" onClick={handleResetBriefings}>Varsayilana Don</Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 
@@ -1681,17 +1687,31 @@ const AdminControlPage = () => {
               {managementSection}
             </TabsContent>
             <TabsContent value="kayitlar" className="space-y-5">
+              {dayEndHistorySection}
+              {scheduleAndBriefingSection}
               {logsSection}
             </TabsContent>
           </Tabs>
         </div>
 
-        <div className="hidden space-y-5 lg:block">
-          {heroSection}
-          {summaryCardsSection}
-          {operationsSection}
-          {managementSection}
-          {logsSection}
+        <div className="hidden lg:block">
+          <Tabs defaultValue="genel" className="space-y-5">
+            <TabsList className="grid w-full max-w-[360px] grid-cols-2">
+              <TabsTrigger value="genel">Genel</TabsTrigger>
+              <TabsTrigger value="log-ve-ayarlar">Log ve Ayarlar</TabsTrigger>
+            </TabsList>
+            <TabsContent value="genel" className="space-y-5">
+              {heroSection}
+              {summaryCardsSection}
+              {operationsSection}
+              {managementSection}
+            </TabsContent>
+            <TabsContent value="log-ve-ayarlar" className="space-y-5">
+              {dayEndHistorySection}
+              {scheduleAndBriefingSection}
+              {logsSection}
+            </TabsContent>
+          </Tabs>
         </div>
       </main>
     </div>
