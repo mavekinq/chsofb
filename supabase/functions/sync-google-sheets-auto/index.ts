@@ -272,6 +272,23 @@ const splitDateTimeParts = (value: string, timezone: string) => {
   return [dateParts, timeParts];
 };
 
+const getIstanbulDayBounds = (value = new Date()) => {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const [year, month, day] = formatter.format(value).split("-").map(Number);
+  const start = new Date(Date.UTC(year, (month || 1) - 1, day || 1, -3, 0, 0));
+  const end = new Date(Date.UTC(year, (month || 1) - 1, (day || 1) + 1, -3, 0, 0));
+
+  return {
+    startIso: start.toISOString(),
+    endIso: end.toISOString(),
+  };
+};
+
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -297,7 +314,7 @@ Deno.serve(async (request: Request) => {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const { startIso: todayStart, endIso: todayEnd } = getIstanbulDayBounds(now);
 
     const [
       flightPlans,
@@ -310,6 +327,7 @@ Deno.serve(async (request: Request) => {
         .from("wheelchair_services")
         .select("*")
         .gte("created_at", todayStart)
+        .lt("created_at", todayEnd)
         .order("created_at", { ascending: false }),
       supabaseAdmin
         .from("wheelchairs")
@@ -319,6 +337,7 @@ Deno.serve(async (request: Request) => {
         .select("created_at, details, performed_by")
         .eq("action", "Vardiya Devri")
         .gte("created_at", todayStart)
+        .lt("created_at", todayEnd)
         .order("created_at", { ascending: false }),
     ]);
 
