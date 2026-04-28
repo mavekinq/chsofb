@@ -199,7 +199,7 @@ const WheelchairServicesPage = () => {
         .filter((flight) => flight.dep_time_ts > 0);
 
       const activeFlights = mappedFlights
-        .filter((flight: Flight) => (flight.dep_estimated_ts || flight.dep_time_ts) > now)
+        .filter((flight: Flight) => (flight.dep_estimated_ts || flight.dep_time_ts) > now - 30 * 60)
         .sort((left: Flight, right: Flight) => {
           const leftTime = left.dep_estimated_ts || left.dep_time_ts;
           const rightTime = right.dep_estimated_ts || right.dep_time_ts;
@@ -762,7 +762,8 @@ const WheelchairServicesPage = () => {
                       {filteredFlightsBySearch.map((flight) => {
                         const depTime = flight.dep_estimated_ts || flight.dep_time_ts;
                         const timeRemaining = getTimeRemaining(depTime);
-                        const isUrgent = depTime - (Date.now() / 1000) < 3600; // Less than 1 hour
+                        const hasDeparted = depTime < Date.now() / 1000;
+                        const isUrgent = !hasDeparted && depTime - (Date.now() / 1000) < 3600; // Less than 1 hour
                         const counterClosed = isCounterClosed(terminal, depTime);
 
                         return (
@@ -781,7 +782,7 @@ const WheelchairServicesPage = () => {
                                     <Plane className={`w-5 h-5 ${isUrgent ? 'text-red-600' : 'text-primary'}`} />
                                   </div>
                                   <div className="min-w-0">
-                                    <CardTitle className={`text-base font-heading truncate ${isUrgent ? 'text-red-700' : ''}`}>
+                                    <CardTitle className={`text-base font-heading truncate ${hasDeparted ? 'text-green-600' : isUrgent ? 'text-red-700' : ''}`}>
                                       {flight.airline_iata} {flight.flight_number}
                                     </CardTitle>
                                     <p className={`text-xs ${isUrgent ? 'text-red-600' : 'text-muted-foreground'}`}>
