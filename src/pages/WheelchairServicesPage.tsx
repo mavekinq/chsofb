@@ -414,8 +414,17 @@ const WheelchairServicesPage = () => {
     return diffMinutes <= COUNTER_CLOSE_MINUTES[terminal];
   };
 
+  // Yeni filtre: Sadece departure destinasyonu olanlar ve domestic ise T1, değilse T2
   const getTerminalFlights = (terminal: string) => {
-    return flights.filter((flight) => resolveFlightTerminal(flight) === terminal);
+    return flights.filter((flight) => {
+      // Sadece departure destinasyonu (arr_iata) varsa
+      if (!flight.arr_iata) return false;
+      // Domestic ise T1, değilse T2
+      const isDomestic = DOMESTIC_AIRPORT_CODES.has(flight.arr_iata.toUpperCase());
+      if (terminal === "T1" && isDomestic) return true;
+      if (terminal === "T2" && !isDomestic) return true;
+      return false;
+    });
   };
 
   const handleAddService = async (flight: Flight, wheelchairId: string, passengerType: string, notes: string, assignedStaff: string) => {
