@@ -165,6 +165,11 @@ const buildIstanbulTimestamp = (minutes: number, dayOffset = 0) => {
   return Math.floor(Date.UTC(year, (month || 1) - 1, (day || 1) + dayOffset, hours - istanbulOffsetHours, mins, 0) / 1000);
 };
 
+const isDefinitelyNextDayDeparture = (minutes: number | null) => {
+  if (minutes === null) return false;
+  return minutes >= 0 && minutes <= 45;
+};
+
 const buildDepartureTimestamps = (
   entries: Array<{ departureTime: string }>,
   liveWindowStartMinutes: number | null,
@@ -174,9 +179,11 @@ const buildDepartureTimestamps = (
   return entries.map((entry) => {
     const minutes = parseDepartureMinutes(entry.departureTime);
     if (minutes === null) return null;
-    const dayOffset = crossesMidnight && liveWindowEndMinutes !== null && liveWindowStartMinutes !== null && minutes <= liveWindowEndMinutes
+    const dayOffset = isDefinitelyNextDayDeparture(minutes)
       ? 1
-      : 0;
+      : crossesMidnight && liveWindowEndMinutes !== null && liveWindowStartMinutes !== null && minutes <= liveWindowEndMinutes
+        ? 1
+        : 0;
     return buildIstanbulTimestamp(minutes, dayOffset);
   });
 };
@@ -189,6 +196,9 @@ const getDepartureDayOffset = (
 ) => {
   const minutes = parseDepartureMinutes(departureTime);
   if (minutes === null) return 0;
+  if (isDefinitelyNextDayDeparture(minutes)) {
+    return 1;
+  }
   return crossesMidnight && liveWindowEndMinutes !== null && liveWindowStartMinutes !== null && minutes <= liveWindowEndMinutes
     ? 1
     : 0;
@@ -429,6 +439,7 @@ const WheelchairServicesPage = () => {
   const fetchFlights = async (silent = false) => {
     if (!silent) setRefreshing(true);
     try {
+      const nowSeconds = getIstanbulNowSeconds();
       // Snapshot + canlı CSV birleşik veri (süreklilik)
       const mergeResult = await fetchFlightPlanEntriesMergedWithWindow();
       const flightPlanEntries = mergeResult.entries;
@@ -468,7 +479,8 @@ const WheelchairServicesPage = () => {
             delayed: undefined,
           } satisfies Flight;
         })
-        .filter((flight) => Boolean(flight.flight_iata));
+        .filter((flight) => Boolean(flight.flight_iata))
+        .filter((flight) => flight.dep_time_ts <= 0 || flight.dep_time_ts > nowSeconds);
       setFlights(mappedFlights);
       setLastUpdated(new Date());
     } catch (error) {
