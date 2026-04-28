@@ -328,6 +328,9 @@ const WheelchairServicesPage = () => {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; flightIata: string } | null>(null);
   const [expandedServices, setExpandedServices] = useState<Set<string>>(new Set());
   const sentPreFlightAlertsRef = useRef<Set<string>>(new Set());
+  const servicesRef = useRef<WheelchairService[]>([]);
+  const currentUserRef = useRef("Personel");
+  const autoCompletingExpiredServicesRef = useRef(false);
 
   // ── Flight notes (Supabase, per-day, auto-deleted at midnight) ──
   const todayKey = getIstanbulDateKey();
@@ -376,6 +379,14 @@ const WheelchairServicesPage = () => {
   };
 
   // ── Helpers ──
+
+  useEffect(() => {
+    servicesRef.current = services;
+  }, [services]);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
 
   const resolveFlightTerminal = (flight: Flight) => {
     if (flight.dep_terminal === "T1" || flight.dep_terminal === "T2") return flight.dep_terminal;
@@ -434,6 +445,67 @@ const WheelchairServicesPage = () => {
     await triggerGoogleSheetsSync({ departures, specialServices, inventorySummary, handovers: [] });
   };
 
+  const autoCompleteExpiredServices = async (passedFlights: Flight[]) => {
+    if (passedFlights.length === 0 || autoCompletingExpiredServicesRef.current) {
+      return;
+    }
+
+    const passedFlightKeys = new Set<string>();
+    passedFlights.forEach((flight) => {
+      getFlightCodeMatchKeys(flight.flight_iata || "").forEach((key) => passedFlightKeys.add(key));
+      getFlightCodeMatchKeys(`${flight.airline_iata || ""}${flight.flight_number || ""}`).forEach((key) => passedFlightKeys.add(key));
+      getFlightCodeMatchKeys(flight.flight_number || "").forEach((key) => passedFlightKeys.add(key));
+    });
+
+    const candidates = servicesRef.current.filter((service) => {
+      if (isServiceCompleted(service)) return false;
+      return getFlightCodeMatchKeys(service.flight_iata || "").some((key) => passedFlightKeys.has(key));
+    });
+
+    if (candidates.length === 0) {
+      return;
+    }
+
+    autoCompletingExpiredServicesRef.current = true;
+    const completedIds = new Set<string>();
+
+    try {
+      await Promise.all(candidates.map(async (service) => {
+        const nextNotes = markServiceAsCompleted(service.notes);
+        const { error } = await supabase
+          .from("wheelchair_services")
+          .update({ notes: nextNotes })
+          .eq("id", service.id);
+
+        if (error) throw error;
+
+        completedIds.add(service.id);
+
+        await supabase.from("action_logs").insert({
+          wheelchair_id: service.wheelchair_id,
+          action: "Hizmet Tamamlandı",
+          details: `${service.flight_iata} • ${service.passenger_type} • Otomatik`,
+          performed_by: currentUserRef.current,
+        });
+      }));
+
+      if (completedIds.size > 0) {
+        setServices((prev) => prev.map((service) => {
+          if (!completedIds.has(service.id)) return service;
+          return { ...service, notes: markServiceAsCompleted(service.notes) };
+        }));
+
+        void syncSheetsData().catch((syncErr) => {
+          console.error("Auto-complete Sheets sync failed:", syncErr);
+        });
+      }
+    } catch (error) {
+      console.error("Auto-complete for passed flights failed:", error);
+    } finally {
+      autoCompletingExpiredServicesRef.current = false;
+    }
+  };
+
   // ── Data fetching ──
 
   const fetchFlights = async (silent = false) => {
@@ -479,9 +551,13 @@ const WheelchairServicesPage = () => {
             delayed: undefined,
           } satisfies Flight;
         })
-        .filter((flight) => Boolean(flight.flight_iata))
-        .filter((flight) => flight.dep_time_ts <= 0 || flight.dep_time_ts > nowSeconds);
-      setFlights(mappedFlights);
+        .filter((flight) => Boolean(flight.flight_iata));
+
+      const passedFlights = mappedFlights.filter((flight) => flight.dep_time_ts > 0 && flight.dep_time_ts <= nowSeconds);
+      const visibleFlights = mappedFlights.filter((flight) => flight.dep_time_ts <= 0 || flight.dep_time_ts > nowSeconds);
+
+      setFlights(visibleFlights);
+      void autoCompleteExpiredServices(passedFlights);
       setLastUpdated(new Date());
     } catch (error) {
       console.error("Flights fetch failed:", error);
