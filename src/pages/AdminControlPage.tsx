@@ -68,6 +68,23 @@ const getLocalDateKey = (value: string) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 };
 
+const getIstanbulDayBounds = (value = new Date()) => {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const [year, month, day] = formatter.format(value).split("-").map(Number);
+  const start = new Date(Date.UTC(year, (month || 1) - 1, day || 1, -3, 0, 0));
+  const end = new Date(Date.UTC(year, (month || 1) - 1, (day || 1) + 1, -3, 0, 0));
+
+  return {
+    startIso: start.toISOString(),
+    endIso: end.toISOString(),
+  };
+};
+
 const parseHandoverRiskCount = (details: string) => {
   const { snapshot } = parseHandoverDetails(details);
   const missingCount = Number(snapshot.match(/🔴\s*(\d+)/)?.[1] || 0);
@@ -166,10 +183,7 @@ const AdminControlPage = () => {
 
   const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const minuteNow = getMinuteOfDay(now);
-  const todayStartIso = useMemo(
-    () => new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString(),
-    [now],
-  );
+  const { startIso: todayStartIso, endIso: todayEndIso } = useMemo(() => getIstanbulDayBounds(now), [now]);
   const trendStartIso = useMemo(
     () => new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).toISOString(),
     [now],
@@ -466,6 +480,7 @@ const AdminControlPage = () => {
           .from("wheelchair_services")
           .select("*")
           .gte("created_at", todayStartIso)
+          .lt("created_at", todayEndIso)
           .order("created_at", { ascending: false }),
         supabase
           .from("wheelchairs")
@@ -475,6 +490,7 @@ const AdminControlPage = () => {
           .select("created_at, details, performed_by")
           .eq("action", "Vardiya Devri")
           .gte("created_at", todayStartIso)
+          .lt("created_at", todayEndIso)
           .order("created_at", { ascending: false }),
       ]);
 
@@ -524,7 +540,7 @@ const AdminControlPage = () => {
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [todayStartIso, syncingGoogleSheets]);
+  }, [todayEndIso, todayStartIso, syncingGoogleSheets]);
 
   const formatDateTime = (value: string) =>
     new Date(value).toLocaleString("tr-TR", {
@@ -605,7 +621,7 @@ const AdminControlPage = () => {
         supabase.from("wheelchairs").select("*"),
         supabase.from("shifts").select("*"),
         supabase.from("action_logs").select("*").order("created_at", { ascending: false }).limit(12),
-        supabase.from("wheelchair_services").select("*").gte("created_at", todayStartIso).order("created_at", { ascending: false }),
+        supabase.from("wheelchair_services").select("*").gte("created_at", todayStartIso).lt("created_at", todayEndIso).order("created_at", { ascending: false }),
         supabase.from("push_subscriptions").select("*").eq("is_active", true).order("updated_at", { ascending: false }),
         supabase.from("wheelchair_services").select("created_at, created_by").gte("created_at", trendStartIso),
         supabase.from("action_logs").select("created_at, details").eq("action", "Vardiya Devri").gte("created_at", trendStartIso),
@@ -696,7 +712,7 @@ const AdminControlPage = () => {
       void supabase.removeChannel(logsChannel);
       void supabase.removeChannel(pushChannel);
     };
-  }, [todayStartIso, trendStartIso]);
+  }, [todayEndIso, todayStartIso, trendStartIso]);
 
   useEffect(() => {
     let cancelled = false;
