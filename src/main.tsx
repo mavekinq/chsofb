@@ -14,9 +14,8 @@ const updateSW = registerSW({
 	},
 });
 
-window.addEventListener("vite:preloadError", () => {
-	// Recover from stale chunk references after a new deploy.
-	const onceKey = "preload-error-recovered";
+const recoverFromStaleCache = () => {
+	const onceKey = "stale-cache-recovered";
 	if (sessionStorage.getItem(onceKey) === "1") {
 		window.location.reload();
 		return;
@@ -34,9 +33,33 @@ window.addEventListener("vite:preloadError", () => {
 				await Promise.all(keys.map((key) => caches.delete(key)));
 			}
 		} finally {
-			window.location.reload();
+			const url = new URL(window.location.href);
+			url.searchParams.set("cachebust", String(Date.now()));
+			window.location.replace(url.toString());
 		}
 	})();
+};
+
+window.addEventListener("vite:preloadError", recoverFromStaleCache);
+
+window.addEventListener("error", (event) => {
+	const target = event.target as HTMLElement | null;
+	if (!target) return;
+
+	if (target instanceof HTMLLinkElement && target.rel === "stylesheet") {
+		recoverFromStaleCache();
+	}
+
+	if (target instanceof HTMLScriptElement) {
+		recoverFromStaleCache();
+	}
+}, true);
+
+window.addEventListener("unhandledrejection", (event) => {
+	const message = String((event.reason as Error | undefined)?.message || event.reason || "");
+	if (message.includes("Failed to fetch dynamically imported module") || message.includes("Importing a module script failed")) {
+		recoverFromStaleCache();
+	}
 });
 
 createRoot(document.getElementById("root")!).render(<App />);
