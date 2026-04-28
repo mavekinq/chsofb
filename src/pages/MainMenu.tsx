@@ -462,10 +462,7 @@ const MainMenu = () => {
               <div className="flex-1">
                 <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Operasyon</p>
                 <p className="mt-2 font-heading text-2xl">Hizmetler</p>
-                <div className="mt-1 grid grid-cols-2 gap-1 text-xs text-muted-foreground">
-                  <span>Açık kayıtlar</span>
-                  <span>Bugün gelen</span>
-                </div>
+                <p className="mt-1 text-xs text-muted-foreground">Uçuşlar için hizmet bilgisi oluştur</p>
               </div>
               <Button size="sm" className="shrink-0" onClick={() => navigate("/wheelchair-services")}>Aç</Button>
             </CardContent>
