@@ -30,8 +30,9 @@ const parseCSVLine = (line: string): string[] => {
   let current = "";
   let inQuotes = false;
 
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+
     if (char === '"') {
       inQuotes = !inQuotes;
     } else if (char === "," && !inQuotes) {
@@ -46,15 +47,15 @@ const parseCSVLine = (line: string): string[] => {
   return result;
 };
 
-export const normalizeFlightCode = (value: string) => value.replace(/\s+/g, "").toUpperCase();
+export const normalizeFlightCode = (value: string) =>
+  value.replace(/\s+/g, "").toUpperCase();
 
 export const getFlightCodeMatchKeys = (value: string) => {
   const normalized = normalizeFlightCode(value);
-  if (!normalized) {
-    return [] as string[];
-  }
+  if (!normalized) return [];
 
   const keys = new Set<string>([normalized]);
+
   const prefixMatch = normalized.match(/^[A-Z]+/);
   const prefix = prefixMatch?.[0] || "";
   const numberPart = normalized.slice(prefix.length);
@@ -72,14 +73,22 @@ export const getFlightCodeMatchKeys = (value: string) => {
   return Array.from(keys);
 };
 
-export const createFlightPlanPositionLookup = (entries: FlightPlanEntry[]) => {
+// 🔥 A sütunu + nokta filtresi
+const isValidRow = (arrivalCode: string, fullRow: string) => {
+  const hasNumber = /\d/.test(arrivalCode); // A sütunu sayı kontrolü
+  const hasDot = fullRow.includes(".");      // satırda nokta var mı?
+
+  return hasNumber && !hasDot;
+};
+
+export const createFlightPlanPositionLookup = (
+  entries: FlightPlanEntry[]
+) => {
   const lookup = new Map<string, string>();
 
   entries.forEach((entry) => {
     [entry.departureCode, entry.arrivalCode].forEach((code) => {
-      if (!code || !entry.parkPosition) {
-        return;
-      }
+      if (!code || !entry.parkPosition) return;
 
       getFlightCodeMatchKeys(code).forEach((key) => {
         if (!lookup.has(key)) {
@@ -93,27 +102,45 @@ export const createFlightPlanPositionLookup = (entries: FlightPlanEntry[]) => {
 };
 
 export const fetchFlightPlanEntries = async () => {
-  const url = `${SHEET_URL}&_t=${Date.now()}`;
-  const response = await fetch(url, { cache: "no-store" });
+  const response = await fetch(SHEET_URL);
   const text = await response.text();
+
   const lines = text.split("\n").filter(Boolean);
-  if (lines.length < 4) {
-    return [] as FlightPlanEntry[];
+
+  if (lines.length < 2) {
+    return [];
   }
 
-  return lines.slice(3).map((line) => {
-    const cols = parseCSVLine(line);
-    return {
-      arrivalCode: cols[1] || "",
-      departureCode: cols[2] || "",
-      aircraftType: cols[3] || "",
-      tailNumber: cols[4] || "",
-      arrivalTime: cols[5] || "",
-      departureTime: cols[6] || "",
-      arrivalIATA: cols[7] || "",
-      departureIATA: cols[8] || "",
-      parkPosition: cols[9] || "",
-      specialNotes: cols[11] || "",
-    };
-  }).filter((entry) => entry.arrivalCode || entry.departureCode);
+  return lines
+    .slice(3)
+    .map((line) => {
+      const cols = parseCSVLine(line);
+
+      return {
+        arrivalCode: cols[1] || "",
+        departureCode: cols[2] || "",
+        aircraftType: cols[3] || "",
+        tailNumber: cols[4] || "",
+        arrivalTime: cols[5] || "",
+        departureTime: cols[6] || "",
+        arrivalIATA: cols[7] || "",
+        departureIATA: cols[8] || "",
+        parkPosition: cols[9] || "",
+        specialNotes: cols[11] || "",
+      };
+    })
+    .filter((entry, index, array) => {
+      const fullRow = JSON.stringify(entry);
+
+      // boş satırları sil
+      if (!entry.arrivalCode && !entry.departureCode) return false;
+
+      // 🔥 SENİN KURAL
+      if (!isValidRow(entry.arrivalCode, fullRow)) {
+        // console.log("FILTERED:", entry);
+        return false;
+      }
+
+      return true;
+    });
 };
