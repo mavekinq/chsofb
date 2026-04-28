@@ -1358,6 +1358,11 @@ const WheelchairServicesPage = () => {
                       {sortedFilteredFlights.map((flight, index) => {
                         const serviceCount = getServiceCountForFlight(flight);
                         const gate = getDisplayGate(flight);
+                        const terminal = resolveFlightTerminal(flight);
+                        const departureTimestamp = getFlightDepartureTimestamp(flight);
+                        const isCounterClosedForFlight = terminal
+                          ? isCounterClosed(terminal, departureTimestamp)
+                          : false;
                         const shouldShowNextDayDivider =
                           flight.dep_day_offset > 0
                           && (index === 0 || sortedFilteredFlights[index - 1].dep_day_offset === 0);
@@ -1447,7 +1452,7 @@ const WheelchairServicesPage = () => {
                                     )}
                                   </div>
 
-                                  <div className="flex items-center gap-1.5">
+                                  <div className="flex items-start gap-1.5">
                                     <Button
                                       variant="outline"
                                       size="icon"
@@ -1465,6 +1470,10 @@ const WheelchairServicesPage = () => {
                                         <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500" />
                                       )}
                                     </Button>
+                                    <div className="flex flex-col items-end gap-1">
+                                      {isCounterClosedForFlight && (
+                                        <span className="text-[10px] font-semibold text-red-600">Kontuar kapalı</span>
+                                      )}
                                     <Button
                                     size="sm"
                                     onClick={() => {
@@ -1476,6 +1485,7 @@ const WheelchairServicesPage = () => {
                                     <Plus className="w-3.5 h-3.5" />
                                     Hizmet Ekle
                                   </Button>
+                                    </div>
                                   </div>
                                 </div>
                               </CardContent>
