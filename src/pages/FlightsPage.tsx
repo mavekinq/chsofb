@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  fetchFlightPlanEntriesMerged,
   fetchFlightPlanEntriesForDate,
   fetchFlightPlanSnapshotDates,
   getIstanbulDateKey,
@@ -46,7 +47,9 @@ const FlightsPage = () => {
       setLoading(true);
 
       try {
-        const data = await fetchFlightPlanEntriesForDate(dateKey);
+        const data = dateKey === getIstanbulDateKey()
+          ? await fetchFlightPlanEntriesMerged()
+          : await fetchFlightPlanEntriesForDate(dateKey);
         setFlights(data);
       } catch (e) {
         console.error("Flight data fetch failed:", e);
