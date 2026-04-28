@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
+import { Analytics } from "@vercel/analytics/react";
 import App from "./App.tsx";
 import "./index.css";
 
@@ -62,4 +63,9 @@ window.addEventListener("unhandledrejection", (event) => {
 	}
 });
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+	<>
+		<App />
+		<Analytics />
+	</>,
+);
