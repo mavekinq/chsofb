@@ -67,7 +67,7 @@ const COUNTER_CLOSE_MINUTES: Record<(typeof TERMINALS)[number], number> = {
 const PRE_FLIGHT_ALERT_WINDOW_MINUTES = 2;
 const DOMESTIC_AIRPORT_CODES = new Set([
   "ADA", "ADB", "ADF", "AJI", "AOE", "ASR", "AYT", "BAL", "BDM", "BJV", "CKZ", "DIY", "DLM", "DNZ", "EDO", "EZS",
-  "ERC", "ERZ", "ESB", "GNY", "GZP", "GZT", "HTY", "IGD", "ISE", "IST", "IZM", "KCM", "KCO", "KSY", "KYA", "MLX",
+  "COV", "ERC", "ERZ", "ESB", "GNY", "GZP", "GZT", "HTY", "IGD", "ISE", "IST", "IZM", "KCM", "KCO", "KSY", "KYA", "MLX",
   "MQM", "MSR", "MZH", "NAV", "NOP", "OGU", "ONQ", "RIZ", "SAW", "SFQ", "SIC", "SZF", "TEQ", "TJK", "TZX", "USQ",
   "VAN", "YEI", "YKO", "BXN",
 ]);
@@ -157,7 +157,13 @@ const WheelchairServicesPage = () => {
   const [currentUser, setCurrentUser] = useState("Personel");
   const sentPreFlightAlertsRef = useRef<Set<string>>(new Set());
 
-  const resolveFlightTerminal = (flight: Flight) => getTerminalFromDestination(flight.arr_iata);
+  const resolveFlightTerminal = (flight: Flight) => {
+    if (flight.dep_terminal === "T1" || flight.dep_terminal === "T2") {
+      return flight.dep_terminal;
+    }
+
+    return getTerminalFromDestination(flight.arr_iata);
+  };
 
   const fetchFlights = async (silent = false) => {
     if (!silent) {
