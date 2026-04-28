@@ -212,10 +212,6 @@ function styleDeparturesRows_(sheet, dataStartRow, rows, columnCount) {
         // Ucan (saati gecmis) ucuslar: sadece Ucus Kodu sutunu yesil.
         rowBackgrounds[0] = '#09ff00';
         rowFontColors[0] = '#14532D';
-      } else if (minutesUntilDeparture <= 180) {
-        // Kalkisa 3 saat veya daha az kalanlar: sadece Ucus Kodu sutunu turuncu.
-        rowBackgrounds[0] = '#FFEDD5';
-        rowFontColors[0] = '#9A3412';
       }
     }
 
@@ -229,28 +225,20 @@ function styleDeparturesRows_(sheet, dataStartRow, rows, columnCount) {
 }
 
 function buildAdjustedDepartureMinutes_(rows, timeColumnIndex) {
-  const adjusted = [];
-  let dayOffset = 0;
-  let previousRawMinutes = null;
+  const nowMinutes = getCurrentMinutesOfDay_();
 
-  rows.forEach(function(row) {
+  return rows.map(function(row) {
     const rawMinutes = parseTimeToMinutes_(row[timeColumnIndex]);
-
     if (rawMinutes === null) {
-      adjusted.push(null);
-      return;
+      return null;
     }
 
-    // Liste 23:xx'den sonra 00:xx'e dustugunde alt satirlari ertesi gun say.
-    if (previousRawMinutes !== null && rawMinutes < previousRawMinutes) {
-      dayOffset += 1440;
+    // Eger bu saat 2 saatten fazla geri kaldiysa ertesi gunun ucusu say.
+    if (rawMinutes < nowMinutes - 120) {
+      return rawMinutes + 1440;
     }
-
-    adjusted.push(rawMinutes + dayOffset);
-    previousRawMinutes = rawMinutes;
+    return rawMinutes;
   });
-
-  return adjusted;
 }
 
 function getCurrentMinutesOfDay_() {
@@ -429,7 +417,7 @@ function mapDepartures_(departures) {
         String(item.departureTime || '').trim(),
         String(item.destination || '').trim(),
         String(item.gate || '').trim(),
-        Number(item.wheelchairCount || 0),
+        Number(item.wheelchairCount || 0) || '',
       ];
     })
     .filter(function(row) {
