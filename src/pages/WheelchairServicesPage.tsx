@@ -1398,6 +1398,11 @@ const WheelchairServicesPage = () => {
                                         <span className="font-heading font-bold text-base">
                                           {flight.airline_iata} {flight.flight_number}
                                         </span>
+                                        {flight.dep_day_offset > 0 && (
+                                          <Badge className="text-[10px] h-4 px-1.5 bg-orange-500/15 text-orange-700 border-orange-400/40">
+                                            Yarın
+                                          </Badge>
+                                        )}
                                         {serviceCount > 0 && (
                                           <Badge className="text-[10px] bg-primary/15 text-primary border-primary/20 h-4 px-1.5">
                                             {serviceCount} hizmet
