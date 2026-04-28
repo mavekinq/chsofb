@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Clock, Plane, Users, MapPin, AlertTriangle, Plus, Trash2,
   Search, RefreshCw, Accessibility, Activity, X, ChevronDown, ChevronUp,
-  MessageSquare, Pencil,
+  MessageSquare, Pencil, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -106,6 +106,7 @@ const COUNTER_CLOSE_MINUTES: Record<(typeof TERMINALS)[number], number> = {
   T2: 60,
 };
 const PRE_FLIGHT_ALERT_WINDOW_MINUTES = 2;
+const SERVICE_COMPLETED_TAG = "[HIZMET_TAMAMLANDI]";
 
 const PASSENGER_TYPE_STYLES: Record<string, { badge: string; label: string }> = {
   STEP: { badge: "bg-blue-100 text-blue-800 border-blue-200", label: "STEP · Merdiven" },
@@ -212,6 +213,21 @@ const getDisplayGate = (flight?: Pick<Flight, "plannedPosition" | "dep_gate" | "
     "-"
   );
 };
+
+const isServiceCompleted = (service: Pick<WheelchairService, "notes">) =>
+  String(service.notes || "").includes(SERVICE_COMPLETED_TAG);
+
+const markServiceAsCompleted = (notes: string) => {
+  if (String(notes || "").includes(SERVICE_COMPLETED_TAG)) return String(notes || "").trim();
+  const clean = String(notes || "").trim();
+  return clean ? `${clean}\n${SERVICE_COMPLETED_TAG}` : SERVICE_COMPLETED_TAG;
+};
+
+const removeCompletedTag = (notes: string) =>
+  String(notes || "")
+    .replace(SERVICE_COMPLETED_TAG, "")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
@@ -734,6 +750,37 @@ const WheelchairServicesPage = () => {
     }
   };
 
+  const handleCompleteService = async (service: WheelchairService) => {
+    if (isServiceCompleted(service)) return;
+
+    const nextNotes = markServiceAsCompleted(service.notes);
+    try {
+      const { error } = await supabase
+        .from("wheelchair_services")
+        .update({ notes: nextNotes })
+        .eq("id", service.id);
+
+      if (error) throw error;
+
+      await supabase.from("action_logs").insert({
+        wheelchair_id: service.wheelchair_id,
+        action: "Hizmet Tamamlandı",
+        details: `${service.flight_iata} • ${service.passenger_type}`,
+        performed_by: currentUser,
+      });
+
+      setServices((prev) => prev.map((item) => (item.id === service.id ? { ...item, notes: nextNotes } : item)));
+      toast.success(`${service.flight_iata} hizmeti tamamlandı olarak işaretlendi`);
+
+      void syncSheetsData().catch((syncErr) => {
+        console.error("Post-complete Sheets sync failed:", syncErr);
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error("Hizmet tamamlandı olarak işaretlenemedi: " + message);
+    }
+  };
+
   // ── Derived state ──
 
   const flightLookup = useMemo(() => {
@@ -753,6 +800,7 @@ const WheelchairServicesPage = () => {
     () =>
       services.filter((service) => {
         if (service.terminal !== activeTab) return false;
+        if (isServiceCompleted(service)) return false;
         return getFlightCodeMatchKeys(service.flight_iata || "").some((key) => flightLookup.has(key));
       }),
     [services, activeTab, flightLookup],
@@ -828,7 +876,7 @@ const WheelchairServicesPage = () => {
     const counts: Record<string, { services: number; flights: number }> = {};
     TERMINALS.forEach((t) => {
       counts[t] = {
-        services: services.filter((s) => s.terminal === t && getFlightCodeMatchKeys(s.flight_iata || "").some((key) => flightLookup.has(key))).length,
+        services: services.filter((s) => s.terminal === t && !isServiceCompleted(s) && getFlightCodeMatchKeys(s.flight_iata || "").some((key) => flightLookup.has(key))).length,
         flights: flights.filter((f) => resolveFlightTerminal(f) === t).length,
       };
     });
@@ -984,7 +1032,7 @@ const WheelchairServicesPage = () => {
                           .map((key) => flightLookup.get(key))
                           .find(Boolean);
                         const assignedStaff = extractAssignedStaffFromService(service);
-                        const visibleNotes = getVisibleServiceNotes(service.notes);
+                        const visibleNotes = getVisibleServiceNotes(removeCompletedTag(service.notes));
                         const typeStyle = PASSENGER_TYPE_STYLES[service.passenger_type] || PASSENGER_TYPE_STYLES.STEP;
                         const isExpanded = expandedServices.has(service.id);
                         const createdTime = new Date(service.created_at).toLocaleTimeString("tr-TR", {
@@ -1064,6 +1112,15 @@ const WheelchairServicesPage = () => {
                                       {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                     </Button>
                                   )}
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="w-6 h-6 text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50"
+                                    onClick={() => void handleCompleteService(service)}
+                                    title="Hizmet tamamlandı"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                  </Button>
                                   <Button
                                     variant="ghost"
                                     size="icon"
