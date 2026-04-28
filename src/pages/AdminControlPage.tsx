@@ -25,6 +25,7 @@ import {
   getStoredSchedulePayload,
   isValidSchedulePayload,
   parseScheduleWorkbook,
+  mergeAndSaveSchedulePayload,
   saveSchedulePayload,
   type SchedulePayload,
 } from "@/lib/work-schedule";
@@ -768,7 +769,7 @@ const AdminControlPage = () => {
         nextPayload = parsed;
       }
 
-      await saveSchedulePayload(nextPayload);
+      await mergeAndSaveSchedulePayload(nextPayload);
       await refreshScheduleState();
       toast.success("Yeni haftanin calisma programi guncellendi");
     } catch {

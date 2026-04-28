@@ -169,6 +169,45 @@ export type ScheduleHistoryItem = {
   payload: SchedulePayload;
 };
 
+export const mergeAndSaveSchedulePayload = async (incoming: SchedulePayload) => {
+  // Load current schedule (local fallback if remote fails)
+  const current = getStoredSchedulePayload();
+
+  // Union of dates: keep existing order then append new dates not already present
+  const existingDates = new Set(current.weekDates);
+  const mergedDates = [
+    ...current.weekDates,
+    ...incoming.weekDates.filter((d) => !existingDates.has(d)),
+  ].sort(); // chronological order
+
+  // Merge employees: for each employee in incoming, update or add
+  const employeeMap = new Map(current.employees.map((e) => [e.name, { ...e, shifts: { ...e.shifts } }]));
+
+  for (const emp of incoming.employees) {
+    const existing = employeeMap.get(emp.name);
+    if (existing) {
+      // Merge shifts — incoming dates override existing
+      for (const [date, shift] of Object.entries(emp.shifts)) {
+        existing.shifts[date] = shift;
+      }
+      // Update group/team info from new file in case it changed
+      existing.group = emp.group;
+      existing.team = emp.team;
+      existing.rawTeam = emp.rawTeam;
+    } else {
+      employeeMap.set(emp.name, { ...emp, shifts: { ...emp.shifts } });
+    }
+  }
+
+  const merged: SchedulePayload = {
+    title: incoming.title || current.title,
+    weekDates: mergedDates,
+    employees: Array.from(employeeMap.values()),
+  };
+
+  await saveSchedulePayload(merged);
+};
+
 export const loadScheduleHistory = async (): Promise<ScheduleHistoryItem[]> => {
   const { data, error } = await supabase
     .from("work_schedule_history")
