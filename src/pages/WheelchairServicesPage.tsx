@@ -205,12 +205,7 @@ const WheelchairServicesPage = () => {
         .filter((flight) => flight.dep_time_ts > 0);
 
       const activeFlights = mappedFlights
-        .filter((flight: Flight) => (flight.dep_estimated_ts || flight.dep_time_ts) > now)
-        .sort((left: Flight, right: Flight) => {
-          const leftTime = left.dep_estimated_ts || left.dep_time_ts;
-          const rightTime = right.dep_estimated_ts || right.dep_time_ts;
-          return leftTime - rightTime;
-        });
+        .filter((flight: Flight) => (flight.dep_estimated_ts || flight.dep_time_ts) > now);
 
       setFlights(activeFlights);
     } catch (error) {
