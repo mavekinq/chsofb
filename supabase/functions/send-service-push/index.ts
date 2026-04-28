@@ -16,6 +16,12 @@ type ServicePushPayload = {
   created_by: string;
   notes: string;
   created_at: string;
+  dep_gate?: string;
+  notification_kind?: "service-created" | "service-updated" | "counter-close" | "announcement";
+  custom_title?: string;
+  custom_body?: string;
+  custom_url?: string;
+  custom_tag?: string;
 };
 
 type PushSubscriptionRow = {
@@ -31,23 +37,66 @@ type PushSubscriptionRow = {
   };
 };
 
-const normalizeStaffName = (value: string) => value.trim().toLocaleLowerCase("tr");
+const isAnnouncementPayload = (service: ServicePushPayload) => {
+  return service.notification_kind === "announcement"
+    || Boolean(service.custom_title?.trim())
+    || Boolean(service.custom_body?.trim());
+};
 
 const buildNotificationBody = (service: ServicePushPayload) => {
+  if (isAnnouncementPayload(service)) {
+    return service.custom_body?.trim() || service.notes?.trim() || "Yeni bir duyuru paylaşıldı.";
+  }
+
+  if (service.notification_kind === "counter-close" || service.passenger_type === "BILDIRIM") {
+    const details = [
+      `Uçuş: ${service.flight_iata}`,
+      `Terminal: ${service.terminal}`,
+    ];
+
+    if (service.dep_gate && service.dep_gate !== "-") {
+      details.push(`Gate: ${service.dep_gate}`);
+    }
+
+    if (service.notes?.trim()) {
+      details.push(service.notes.trim());
+    }
+
+    return details.join(" • ");
+  }
+
   const details = [
     `Uçuş: ${service.flight_iata}`,
     `Sandalye: ${service.wheelchair_id}`,
     `Yolcu: ${service.passenger_type}`,
     `Atanan: ${service.assigned_staff || "Belirtilmedi"}`,
     `Terminal: ${service.terminal}`,
-    `Açan: ${service.created_by}`,
   ];
+
+  if (service.dep_gate && service.dep_gate !== "-") {
+    details.push(`Gate: ${service.dep_gate}`);
+  }
+
+  details.push(`Açan: ${service.created_by}`);
 
   if (service.notes?.trim()) {
     details.push(`Not: ${service.notes.trim()}`);
   }
 
   return details.join(" • ");
+};
+
+const buildNotificationTitle = (service: ServicePushPayload) => {
+  if (isAnnouncementPayload(service)) {
+    return service.custom_title?.trim() || "📢 Operasyon Duyurusu";
+  }
+  if (service.notification_kind === "counter-close" || service.passenger_type === "BILDIRIM") {
+    return `🔔 Kontuar Kapandı: ${service.flight_iata}`;
+  }
+  if (service.notification_kind === "service-updated") {
+    return `Hizmet Güncellendi: ${service.flight_iata}`;
+  }
+  return `Yeni Hizmet: ${service.flight_iata}`;
 };
 
 Deno.serve(async (request) => {
@@ -71,38 +120,22 @@ Deno.serve(async (request) => {
     const service = await request.json() as ServicePushPayload;
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-    const [
-      { data: subscriptions, error: subscriptionError },
-      { data: activeShifts, error: shiftError },
-    ] = await Promise.all([
-      supabaseAdmin
-        .from("push_subscriptions")
-        .select("endpoint, subscription, user_name")
-        .eq("is_active", true),
-      supabaseAdmin
-        .from("shifts")
-        .select("staff_name")
-        .is("ended_at", null),
-    ]);
+    const { data: subscriptions, error: subscriptionError } = await supabaseAdmin
+      .from("push_subscriptions")
+      .select("endpoint, subscription, user_name")
+      .eq("is_active", true);
 
-    if (subscriptionError || shiftError) {
-      throw subscriptionError || shiftError;
+    if (subscriptionError) {
+      throw subscriptionError;
     }
 
-    const activeShiftStaff = new Set((activeShifts || [])
-      .map((row) => row.staff_name)
-      .filter(Boolean)
-      .map((staffName) => normalizeStaffName(staffName)));
-
-    const eligibleSubscriptions = (subscriptions || []).filter((row) =>
-      activeShiftStaff.has(normalizeStaffName(row.user_name || "")),
-    ) as PushSubscriptionRow[];
+    const eligibleSubscriptions = (subscriptions || []) as PushSubscriptionRow[];
 
     const payload = JSON.stringify({
-      title: `Yeni Hizmet: ${service.flight_iata}`,
+      title: buildNotificationTitle(service),
       body: buildNotificationBody(service),
-      tag: service.id ? `wheelchair-service-${service.id}` : `wheelchair-service-${service.flight_iata}`,
-      url: "/wheelchair-services",
+      tag: service.custom_tag || (service.id ? `wheelchair-service-${service.id}` : `wheelchair-service-${service.flight_iata}`),
+      url: service.custom_url || "/wheelchair-services",
     });
 
     const results = await Promise.all(eligibleSubscriptions.map(async (subscriptionRow) => {
@@ -129,12 +162,9 @@ Deno.serve(async (request) => {
 
     return new Response(JSON.stringify({
       success: true,
-      total: (subscriptions || []).length,
-      eligible: eligibleSubscriptions.length,
-      suppressed: Math.max((subscriptions || []).length - eligibleSubscriptions.length, 0),
+      total: eligibleSubscriptions.length,
       sent: results.filter((result) => result.sent).length,
       failed: results.filter((result) => !result.sent).length,
-      activeShiftStaff: Array.from(activeShiftStaff),
     }), {
       headers: {
         ...corsHeaders,

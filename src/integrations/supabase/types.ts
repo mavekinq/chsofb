@@ -89,6 +89,48 @@ export type Database = {
         }
         Relationships: []
       }
+      briefings_state: {
+        Row: {
+          id: string
+          payload: Json
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          payload: Json
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          payload?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      flight_plan_snapshots: {
+        Row: {
+          created_at: string
+          entries: Json
+          raw_csv: string
+          snapshot_date: string
+          source_fetched_at: string
+        }
+        Insert: {
+          created_at?: string
+          entries?: Json
+          raw_csv?: string
+          snapshot_date: string
+          source_fetched_at?: string
+        }
+        Update: {
+          created_at?: string
+          entries?: Json
+          raw_csv?: string
+          snapshot_date?: string
+          source_fetched_at?: string
+        }
+        Relationships: []
+      }
       shifts: {
         Row: {
           created_at: string

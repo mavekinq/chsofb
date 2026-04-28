@@ -1,0 +1,26 @@
+[
+  {
+    "arrivalCode": "TK1234",
+    "departureCode": "TK1235",
+    "aircraftType": "A320",
+    "tailNumber": "TC-JRA",
+    "arrivalTime": "08:00",
+    "departureTime": "09:00",
+    "arrivalIATA": "IST",
+    "departureIATA": "AYT",
+    "parkPosition": "A1",
+    "specialNotes": ""
+  },
+  {
+    "arrivalCode": "PC5678",
+    "departureCode": "PC5679",
+    "aircraftType": "B737",
+    "tailNumber": "TC-ABC",
+    "arrivalTime": "10:00",
+    "departureTime": "11:00",
+    "arrivalIATA": "SAW",
+    "departureIATA": "AYT",
+    "parkPosition": "B2",
+    "specialNotes": "Engelli yolcu"
+  }
+]

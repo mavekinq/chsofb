@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { supabase } from "@/integrations/supabase/client";
 import { Accessibility, ArrowRight, Bell, Briefcase, CalendarDays, ExternalLink, LogOut, Megaphone, Newspaper, Phone, Plane, RefreshCw, Shield, Users } from "lucide-react";
 import SplashScreen from "@/components/SplashScreen";
-import { BRIEFINGS_UPDATED_EVENT, getBriefings } from "@/lib/briefings";
+import { BRIEFINGS_UPDATED_EVENT, getBriefings, loadBriefings } from "@/lib/briefings";
 import { CELEBI_NEWS_SOURCE_URL, type CelebiNewsItem, fetchCelebiNews } from "@/lib/celebi-news";
 import { fetchFlightPlanEntries } from "@/lib/flight-plan";
 import { ensurePushSubscription, getNotificationPermissionState, isNotificationSupported, requiresInstalledPwaForPush, syncPushSubscriptionIfEnabled } from "@/lib/notifications";
@@ -166,6 +166,10 @@ const MainMenu = () => {
     };
 
     const handleStorage = () => setBriefings(getBriefings());
+
+    void loadBriefings().then((items) => {
+      setBriefings(items);
+    });
 
     window.addEventListener(BRIEFINGS_UPDATED_EVENT, handleBriefingsUpdated as EventListener);
     window.addEventListener("storage", handleStorage);

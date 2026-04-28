@@ -4,7 +4,19 @@ import { Search, Plane, ArrowLeft, Clock, MapPin, AlertTriangle } from "lucide-r
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fetchFlightPlanEntries, type FlightPlanEntry } from "@/lib/flight-plan";
+import {
+  fetchFlightPlanEntriesForDate,
+  fetchFlightPlanSnapshotDates,
+  getIstanbulDateKey,
+  type FlightPlanEntry,
+} from "@/lib/flight-plan";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -17,13 +29,24 @@ import {
 const FlightsPage = () => {
   const navigate = useNavigate();
   const [flights, setFlights] = useState<FlightPlanEntry[]>([]);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState(getIstanbulDateKey());
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchFlights = async () => {
+    const loadSnapshotDates = async () => {
+      const snapshotDates = await fetchFlightPlanSnapshotDates();
+      const today = getIstanbulDateKey();
+      const nextDates = snapshotDates.includes(today) ? snapshotDates : [today, ...snapshotDates];
+      setAvailableDates(Array.from(new Set(nextDates)));
+    };
+
+    const fetchFlights = async (dateKey: string) => {
+      setLoading(true);
+
       try {
-        const data = await fetchFlightPlanEntries();
+        const data = await fetchFlightPlanEntriesForDate(dateKey);
         setFlights(data);
       } catch (e) {
         console.error("Flight data fetch failed:", e);
@@ -31,10 +54,27 @@ const FlightsPage = () => {
         setLoading(false);
       }
     };
-    fetchFlights();
-    const interval = window.setInterval(() => { void fetchFlights(); }, 60000);
+
+    void loadSnapshotDates();
+    void fetchFlights(selectedDate);
+
+    const interval = window.setInterval(() => {
+      void loadSnapshotDates();
+      void fetchFlights(selectedDate);
+    }, 60000);
+
     return () => window.clearInterval(interval);
-  }, []);
+  }, [selectedDate]);
+
+  const formatSnapshotDate = (value: string) => {
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(year, (month || 1) - 1, day || 1);
+    return date.toLocaleDateString("tr-TR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
 
   const filtered = flights.filter((f) =>
     Object.values(f).some((v) => v.toLowerCase().includes(search.toLowerCase()))
@@ -60,14 +100,30 @@ const FlightsPage = () => {
       </header>
 
       <main className="container px-4 py-6">
-        <div className="relative mb-6 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Uçuş kodu, kuyruk no, park pozisyonu ara..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-secondary border-border"
-          />
+        <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative max-w-md flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Uçuş kodu, kuyruk no, park pozisyonu ara..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 bg-secondary border-border"
+            />
+          </div>
+          <div className="w-full max-w-xs">
+            <Select value={selectedDate} onValueChange={setSelectedDate}>
+              <SelectTrigger className="bg-secondary border-border">
+                <SelectValue placeholder="Tarih seçin" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover border-border">
+                {availableDates.map((dateKey) => (
+                  <SelectItem key={dateKey} value={dateKey}>
+                    {formatSnapshotDate(dateKey)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {loading ? (

@@ -1,4 +1,10 @@
 project_id = "phkebmawlwlwtbxosafw"
 
+[functions.capture-flight-plan-snapshot]
+verify_jwt = false
+
+[functions.send-service-push]
+verify_jwt = false
+
 [functions.sync-google-sheets-auto]
 verify_jwt = false

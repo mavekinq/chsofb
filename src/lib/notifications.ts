@@ -11,6 +11,8 @@ type ServicePushPayload = {
   created_by: string;
   notes: string;
   created_at: string;
+  dep_gate?: string;
+  notification_kind?: "service-created" | "service-updated" | "counter-close";
 };
 
 type PushDeliveryResult = {
