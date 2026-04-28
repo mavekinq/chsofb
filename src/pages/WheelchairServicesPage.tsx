@@ -318,24 +318,50 @@ const WheelchairServicesPage = () => {
   const [expandedServices, setExpandedServices] = useState<Set<string>>(new Set());
   const sentPreFlightAlertsRef = useRef<Set<string>>(new Set());
 
-  // ── Flight notes (localStorage, per-day) ──
+  // ── Flight notes (Supabase, per-day, auto-deleted at midnight) ──
   const todayKey = getIstanbulDateKey();
-  const NOTES_STORAGE_KEY = `ww-flight-notes-${todayKey}`;
-  const [flightNotes, setFlightNotes] = useState<Record<string, string>>(() => {
-    try { return JSON.parse(localStorage.getItem(NOTES_STORAGE_KEY) || "{}"); } catch { return {}; }
-  });
+  const [flightNotes, setFlightNotes] = useState<Record<string, string>>({});
   const [noteDialog, setNoteDialog] = useState<{ flightIata: string; value: string } | null>(null);
 
-  const saveFlightNote = (flightIata: string, note: string) => {
-    const updated = { ...flightNotes, [flightIata]: note };
-    setFlightNotes(updated);
-    localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(updated));
+  // Load today's notes from Supabase on mount + delete old notes
+  useEffect(() => {
+    const loadNotes = async () => {
+      // Delete notes older than today
+      await supabase
+        .from("flight_notes")
+        .delete()
+        .lt("note_date", todayKey);
+
+      // Load today's notes
+      const { data } = await supabase
+        .from("flight_notes")
+        .select("flight_iata, note")
+        .eq("note_date", todayKey);
+
+      if (data) {
+        const map: Record<string, string> = {};
+        data.forEach((row) => { map[row.flight_iata] = row.note; });
+        setFlightNotes(map);
+      }
+    };
+
+    void loadNotes();
+  }, [todayKey]);
+
+  const saveFlightNote = async (flightIata: string, note: string) => {
+    setFlightNotes((prev) => ({ ...prev, [flightIata]: note }));
+    await supabase
+      .from("flight_notes")
+      .upsert({ flight_iata: flightIata, note_date: todayKey, note, created_by: currentUser }, { onConflict: "flight_iata,note_date" });
   };
 
-  const clearFlightNote = (flightIata: string) => {
-    const { [flightIata]: _, ...rest } = flightNotes;
-    setFlightNotes(rest);
-    localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(rest));
+  const clearFlightNote = async (flightIata: string) => {
+    setFlightNotes((prev) => { const { [flightIata]: _, ...rest } = prev; return rest; });
+    await supabase
+      .from("flight_notes")
+      .delete()
+      .eq("flight_iata", flightIata)
+      .eq("note_date", todayKey);
   };
 
   // ── Helpers ──
@@ -1346,7 +1372,7 @@ const WheelchairServicesPage = () => {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-2 py-1">
-            <Label className="text-sm text-muted-foreground">Operasyonel not (sadece bu cihazda saklanır)</Label>
+            <Label className="text-sm text-muted-foreground">Operasyonel not (gün sonu otomatik silinir)</Label>
             <Textarea
               rows={3}
               autoFocus
@@ -1356,7 +1382,7 @@ const WheelchairServicesPage = () => {
               onChange={(e) => setNoteDialog((prev) => prev ? { ...prev, value: e.target.value } : null)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && e.ctrlKey && noteDialog) {
-                  saveFlightNote(noteDialog.flightIata, noteDialog.value.trim());
+                  void saveFlightNote(noteDialog.flightIata, noteDialog.value.trim());
                   setNoteDialog(null);
                 }
               }}
@@ -1369,7 +1395,7 @@ const WheelchairServicesPage = () => {
                 variant="outline"
                 className="text-destructive border-destructive/30 hover:bg-destructive/5 sm:mr-auto"
                 onClick={() => {
-                  clearFlightNote(noteDialog.flightIata);
+                  void clearFlightNote(noteDialog.flightIata);
                   setNoteDialog(null);
                 }}
               >
@@ -1381,10 +1407,10 @@ const WheelchairServicesPage = () => {
               onClick={() => {
                 if (noteDialog) {
                   if (noteDialog.value.trim()) {
-                    saveFlightNote(noteDialog.flightIata, noteDialog.value.trim());
+                    void saveFlightNote(noteDialog.flightIata, noteDialog.value.trim());
                     toast.success("Not kaydedildi");
                   } else {
-                    clearFlightNote(noteDialog.flightIata);
+                    void clearFlightNote(noteDialog.flightIata);
                   }
                   setNoteDialog(null);
                 }

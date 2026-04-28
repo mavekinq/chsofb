@@ -71,6 +71,36 @@ export type Database = {
         }
         Relationships: []
       }
+      flight_notes: {
+        Row: {
+          id: string
+          flight_iata: string
+          note_date: string
+          note: string
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          flight_iata: string
+          note_date?: string
+          note: string
+          created_by?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          flight_iata?: string
+          note_date?: string
+          note?: string
+          created_by?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       directory_manual_phones: {
         Row: {
           name: string
