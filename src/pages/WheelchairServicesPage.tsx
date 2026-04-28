@@ -176,6 +176,17 @@ const getIstanbulTomorrowLabel = (value = new Date()) => {
 
 const getIstanbulNowSeconds = () => Math.floor(Date.now() / 1000);
 
+const getIstanbulNowMinutes = (value = new Date()) => {
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Istanbul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const [hour, minute] = formatter.format(value).split(":").map(Number);
+  return (hour || 0) * 60 + (minute || 0);
+};
+
 const buildIstanbulTimestamp = (minutes: number, dayOffset = 0) => {
   const { year, month, day } = getIstanbulDateParts();
   const hours = Math.floor(minutes / 60);
@@ -184,9 +195,11 @@ const buildIstanbulTimestamp = (minutes: number, dayOffset = 0) => {
   return Math.floor(Date.UTC(year, (month || 1) - 1, (day || 1) + dayOffset, hours - istanbulOffsetHours, mins, 0) / 1000);
 };
 
-const isDefinitelyNextDayDeparture = (minutes: number | null) => {
+const isDefinitelyNextDayDeparture = (minutes: number | null, nowMinutes: number) => {
   if (minutes === null) return false;
-  return minutes >= 0 && minutes <= 45;
+  // 00:00-00:45 uçuşlarını, gün içinde ertesi gün akışına taşı.
+  // Gece yarısı sonrası ilk saatlerde (00:00-00:59) dünden devreden akışta kalır.
+  return minutes >= 0 && minutes <= 45 && nowMinutes >= 60;
 };
 
 const buildDepartureTimestamps = (
@@ -194,11 +207,12 @@ const buildDepartureTimestamps = (
   liveWindowStartMinutes: number | null,
   liveWindowEndMinutes: number | null,
   crossesMidnight: boolean,
+  nowMinutes: number,
 ) => {
   return entries.map((entry) => {
     const minutes = parseDepartureMinutes(entry.departureTime);
     if (minutes === null) return null;
-    const dayOffset = isDefinitelyNextDayDeparture(minutes)
+    const dayOffset = isDefinitelyNextDayDeparture(minutes, nowMinutes)
       ? 1
       : crossesMidnight && liveWindowEndMinutes !== null && liveWindowStartMinutes !== null && minutes <= liveWindowEndMinutes
         ? 1
@@ -212,10 +226,11 @@ const getDepartureDayOffset = (
   liveWindowStartMinutes: number | null,
   liveWindowEndMinutes: number | null,
   crossesMidnight: boolean,
+  nowMinutes: number,
 ) => {
   const minutes = parseDepartureMinutes(departureTime);
   if (minutes === null) return 0;
-  if (isDefinitelyNextDayDeparture(minutes)) {
+  if (isDefinitelyNextDayDeparture(minutes, nowMinutes)) {
     return 1;
   }
   return crossesMidnight && liveWindowEndMinutes !== null && liveWindowStartMinutes !== null && minutes <= liveWindowEndMinutes
@@ -535,11 +550,13 @@ const WheelchairServicesPage = () => {
       // Snapshot + canlı CSV birleşik veri (süreklilik)
       const mergeResult = await fetchFlightPlanEntriesMergedWithWindow();
       const flightPlanEntries = mergeResult.entries;
+      const nowMinutes = getIstanbulNowMinutes();
       const departureTimestamps = buildDepartureTimestamps(
         flightPlanEntries,
         mergeResult.liveWindowStartMinutes,
         mergeResult.liveWindowEndMinutes,
         mergeResult.crossesMidnight,
+        nowMinutes,
       );
       const mappedFlights = flightPlanEntries
         .map((entry, index) => {
@@ -549,6 +566,7 @@ const WheelchairServicesPage = () => {
             mergeResult.liveWindowStartMinutes,
             mergeResult.liveWindowEndMinutes,
             mergeResult.crossesMidnight,
+            nowMinutes,
           );
           return {
             airline_iata: extractAirlineCode(flightCode),

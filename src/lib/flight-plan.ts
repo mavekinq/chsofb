@@ -67,6 +67,19 @@ const parseDepartureMinutes = (value: string) => {
   return Number(match[1]) * 60 + Number(match[2]);
 };
 
+const isEarlyMidnightDeparture = (value: string) => {
+  const minutes = parseDepartureMinutes(value);
+  return minutes !== null && minutes >= 0 && minutes <= 45;
+};
+
+const getSnapshotEntryKey = (entry: FlightPlanEntry) => {
+  return [
+    normalizeFlightCode(entry.departureCode || ""),
+    String(entry.departureTime || "").trim(),
+    String(entry.tailNumber || "").trim().toUpperCase(),
+  ].join("|");
+};
+
 const getRelativeSortMinutes = (minutes: number, pivotMinutes: number) => {
   return minutes < pivotMinutes ? minutes + 1440 : minutes;
 };
@@ -254,21 +267,42 @@ export const fetchFlightPlanEntriesForDate = async (snapshotDate: string) => {
  */
 export const fetchFlightPlanEntriesMergedWithWindow = async (): Promise<FlightPlanMergeResult> => {
   const today = getIstanbulDateKey();
+  const yesterday = getIstanbulDateKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
   const liveEntries = await fetchFlightPlanEntries();
-  const snapshotResponse = await supabase
+  const [todaySnapshotResponse, yesterdaySnapshotResponse] = await Promise.all([
+    supabase
     .from("flight_plan_snapshots")
     .select("entries")
     .eq("snapshot_date", today)
-    .maybeSingle();
-  const rawSnapshotEntries = snapshotResponse.error || !Array.isArray(snapshotResponse.data?.entries)
+    .maybeSingle(),
+    supabase
+      .from("flight_plan_snapshots")
+      .select("entries")
+      .eq("snapshot_date", yesterday)
+      .maybeSingle(),
+  ]);
+
+  const rawSnapshotEntries = todaySnapshotResponse.error || !Array.isArray(todaySnapshotResponse.data?.entries)
     ? []
-    : snapshotResponse.data.entries;
+    : todaySnapshotResponse.data.entries;
   const snapshotResult = rawSnapshotEntries.filter(isFlightPlanEntry) as unknown as FlightPlanEntry[];
 
-  // Bugüne ait snapshot yoksa sadece canlı veri döndür
+  const rawYesterdaySnapshotEntries = yesterdaySnapshotResponse.error || !Array.isArray(yesterdaySnapshotResponse.data?.entries)
+    ? []
+    : yesterdaySnapshotResponse.data.entries;
+  const yesterdaySnapshotResult = rawYesterdaySnapshotEntries.filter(isFlightPlanEntry) as unknown as FlightPlanEntry[];
+
+  const carryoverCandidateEntries = yesterdaySnapshotResult.filter((entry) => isEarlyMidnightDeparture(entry.departureTime));
+
+  // Bugüne ait snapshot yoksa canlı veri temel alınır
   if (snapshotResult.length === 0) {
+    const liveKeys = new Set(liveEntries.map(getSnapshotEntryKey));
+    const carryoverEntries = carryoverCandidateEntries
+      .filter((entry) => !liveKeys.has(getSnapshotEntryKey(entry)))
+      .sort((a, b) => (parseDepartureMinutes(a.departureTime) ?? 9999) - (parseDepartureMinutes(b.departureTime) ?? 9999));
+
     return {
-      entries: liveEntries,
+      entries: [...carryoverEntries, ...liveEntries],
       liveWindowStartMinutes: parseDepartureMinutes(liveEntries[0]?.departureTime || ""),
       liveWindowEndMinutes: parseDepartureMinutes(liveEntries.at(-1)?.departureTime || ""),
       crossesMidnight: false,
@@ -304,9 +338,15 @@ export const fetchFlightPlanEntriesMergedWithWindow = async (): Promise<FlightPl
       return getRelativeSortMinutes(aMinutes, lastLiveMinutes) - getRelativeSortMinutes(bMinutes, lastLiveMinutes);
     });
 
-  // Canlı CSV akışı temel alınır; snapshot'ta olup CSV'de olmayanlar en sona eklenir.
+  const mergedTodayEntries = [...liveEntries, ...sortedSnapshotOnlyEntries];
+  const mergedTodayKeys = new Set(mergedTodayEntries.map(getSnapshotEntryKey));
+  const carryoverEntries = carryoverCandidateEntries
+    .filter((entry) => !mergedTodayKeys.has(getSnapshotEntryKey(entry)))
+    .sort((a, b) => (parseDepartureMinutes(a.departureTime) ?? 9999) - (parseDepartureMinutes(b.departureTime) ?? 9999));
+
+  // Akış: dünden devreden 00:00-00:45 uçuşları en üstte, bugünün akışı altında devam eder.
   return {
-    entries: [...liveEntries, ...sortedSnapshotOnlyEntries],
+    entries: [...carryoverEntries, ...mergedTodayEntries],
     liveWindowStartMinutes: firstLiveMinutes,
     liveWindowEndMinutes: lastLiveMinutes,
     crossesMidnight,
