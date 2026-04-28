@@ -22,6 +22,9 @@ type ServicePushPayload = {
   custom_body?: string;
   custom_url?: string;
   custom_tag?: string;
+  // If provided, only send to users whose name is in this list (on-shift filter)
+  // Announcements are always sent to all users regardless of this field
+  on_shift_users?: string[];
 };
 
 type PushSubscriptionRow = {
@@ -129,7 +132,15 @@ Deno.serve(async (request) => {
       throw subscriptionError;
     }
 
-    const eligibleSubscriptions = (subscriptions || []) as PushSubscriptionRow[];
+    const allSubscriptions = (subscriptions || []) as PushSubscriptionRow[];
+
+    // Filter to on-shift users only (unless this is an announcement)
+    const isAnnouncement = isAnnouncementPayload(service);
+    const eligibleSubscriptions = (!isAnnouncement && service.on_shift_users && service.on_shift_users.length > 0)
+      ? allSubscriptions.filter((sub) => service.on_shift_users!.some(
+          (shiftUser) => shiftUser.trim().toLowerCase() === sub.user_name.trim().toLowerCase()
+        ))
+      : allSubscriptions;
 
     const payload = JSON.stringify({
       title: buildNotificationTitle(service),

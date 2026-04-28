@@ -35,6 +35,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { fetchFlightPlanEntriesMerged, fetchFlightPlanEntriesMergedWithWindow, getFlightCodeMatchKeys, getIstanbulDateKey, normalizeFlightCode } from "@/lib/flight-plan";
 import { triggerServicePushNotification } from "@/lib/notifications";
+import { getOnShiftUserNames } from "@/lib/work-schedule";
 import { triggerGoogleSheetsSync } from "@/lib/google-sheets-sync";
 import { buildDeparturesPayload, buildFlightLookup, buildInventorySummaryPayload, buildSpecialServicesPayload } from "@/lib/google-sheets-payload";
 import { buildServiceNotesWithAssignedStaff, extractAssignedStaffFromService, getVisibleServiceNotes, isAssignedStaffSchemaCacheError } from "@/lib/wheelchair-service-utils";
@@ -554,6 +555,7 @@ const WheelchairServicesPage = () => {
         terminal,
         wheelchair_id: `TOPLAM-${relatedServices.length}`,
         dep_gate: gate,
+        on_shift_users: getOnShiftUserNames(),
       }).catch((pushError) => {
         sentPreFlightAlertsRef.current.delete(alertKey);
         console.error("Pre-flight service summary push failed:", pushError);
@@ -663,6 +665,7 @@ const WheelchairServicesPage = () => {
       wheelchair_id: wheelchairId,
       dep_gate: getDisplayGate(flight),
       notification_kind: "service-created",
+      on_shift_users: getOnShiftUserNames(),
     }).catch((e) => console.error("Push notification failed:", e));
 
     toast.success(`${flight.flight_iata} için hizmet kaydedildi`, {
@@ -732,6 +735,7 @@ const WheelchairServicesPage = () => {
       wheelchair_id: wheelchairId,
       dep_gate: getDisplayGate(flight),
       notification_kind: "service-updated",
+      on_shift_users: getOnShiftUserNames(),
     }).catch((pushError) => console.error("Update push notification failed:", pushError));
 
     toast.success(`${flight.flight_iata} hizmeti güncellendi`, {

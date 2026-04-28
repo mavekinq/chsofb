@@ -13,6 +13,7 @@ type ServicePushPayload = {
   created_at: string;
   dep_gate?: string;
   notification_kind?: "service-created" | "service-updated" | "counter-close";
+  on_shift_users?: string[];
 };
 
 type PushDeliveryResult = {

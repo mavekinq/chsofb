@@ -271,3 +271,51 @@ export const parseScheduleWorkbook = async (file: File) => {
 
   return buildSchedulePayload(rows);
 };
+
+const SHIFT_PATTERN = /^(\d{2})(\d{2})-(\d{2})(\d{2})$/;
+
+const parseShiftMinutes = (value: string) => {
+  const normalized = (value || "").trim().replace(/\s+/g, "");
+  const match = normalized.match(SHIFT_PATTERN);
+  if (!match) return null;
+  const start = Number(match[1]) * 60 + Number(match[2]);
+  const end = Number(match[3]) * 60 + Number(match[4]);
+  return { start, end, overnight: end <= start };
+};
+
+const isShiftActiveNow = (shiftValue: string, minuteNow: number) => {
+  const parsed = parseShiftMinutes(shiftValue);
+  if (!parsed) return false;
+  if (!parsed.overnight) return minuteNow >= parsed.start && minuteNow < parsed.end;
+  return minuteNow >= parsed.start || minuteNow < parsed.end;
+};
+
+const isOvernightFromPrevDay = (shiftValue: string, minuteNow: number) => {
+  const parsed = parseShiftMinutes(shiftValue);
+  if (!parsed || !parsed.overnight) return false;
+  return minuteNow < parsed.end;
+};
+
+/**
+ * Returns the names of employees currently on shift according to the stored schedule.
+ * Pass these names to the push notification payload so only on-shift staff receive alerts.
+ */
+export const getOnShiftUserNames = (): string[] => {
+  const payload = getStoredSchedulePayload();
+  const now = new Date();
+  const minuteNow = now.getHours() * 60 + now.getMinutes();
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+  const todayIndex = payload.weekDates.indexOf(todayKey);
+  if (todayIndex === -1) return [];
+  const previousDayKey = todayIndex > 0 ? payload.weekDates[todayIndex - 1] : null;
+
+  return payload.employees
+    .filter((employee) => {
+      const todayShift = employee.shifts[todayKey] || "";
+      const previousShift = previousDayKey ? employee.shifts[previousDayKey] || "" : "";
+      return isShiftActiveNow(todayShift, minuteNow)
+        || (previousDayKey ? isOvernightFromPrevDay(previousShift, minuteNow) : false);
+    })
+    .map((employee) => employee.name);
+};
