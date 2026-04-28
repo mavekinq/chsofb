@@ -1377,13 +1377,6 @@ const AdminControlPage = () => {
               <p className="text-xs text-muted-foreground mb-1">Yuklu hafta</p>
               <p className="font-medium">{currentWeekLabel}</p>
             </div>
-            <Alert>
-              <CalendarDays className="h-4 w-4" />
-              <AlertTitle>{hasCustomSchedule ? "Ozel hafta aktif" : "Varsayilan hafta aktif"}</AlertTitle>
-              <AlertDescription>
-                Yukleme sonrasi birlesik program hem yerelde hem merkezi kayitta saklanir. Onceki versiyonlar Program sayfasindaki Gecmis Programlar panelinden geri acilabilir.
-              </AlertDescription>
-            </Alert>
             <div className="flex flex-wrap gap-2">
               <Button onClick={copyImportCommand}>Excel Dosyasi Sec</Button>
               <Button variant="outline" onClick={() => navigate("/work-schedule")}>Programi Ac</Button>
