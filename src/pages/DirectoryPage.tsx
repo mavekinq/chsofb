@@ -84,12 +84,30 @@ function parseDirectoryWorkbook(arrayBuffer: ArrayBuffer): Map<string, string> {
   const result = new Map<string, { score: number; phone: string }>();
 
   const commPriority: Record<string, number> = {
-    "şirket cep telefonu": 100,
+    "sirket cep telefonu": 100,
     "ozel cep telefonu": 90,
-    "özel cep telefonu": 90,
-    "şirket telefonu": 80,
-    "şirket dahili no": 70,
-    "şirket cep telefonu kısa kod": 60,
+    "sirket telefonu": 80,
+    "sirket dahili no": 70,
+    "sirket cep telefonu kisa kod": 60,
+  };
+
+  const pickBestPhone = (values: string[], commRaw: string): { phone: string; score: number } | null => {
+    const valid = values
+      .map((v) => v.trim())
+      .filter((v) => looksLikePhone(v));
+
+    if (valid.length === 0) return null;
+
+    // Prefer mobile-looking values first (longer digits), then keep first occurrence.
+    const phone = valid.sort((a, b) => b.replace(/\D/g, "").length - a.replace(/\D/g, "").length)[0];
+    const digits = phone.replace(/\D/g, "").length;
+    let score = commPriority[commRaw] ?? 50;
+
+    if (digits >= 10) score += 20;
+    else if (digits >= 6) score += 10;
+    else score += 3;
+
+    return { phone, score };
   };
 
   for (const sheetName of wb.SheetNames) {
@@ -98,39 +116,50 @@ function parseDirectoryWorkbook(arrayBuffer: ArrayBuffer): Map<string, string> {
     if (rows.length < 2) continue;
 
     const header = rows[0].map((v) => normalize(String(v ?? "")));
-    const nameIdx = header.findIndex((h) => h.includes("personel numarasi"));
-    const commIdx = header.findIndex((h) => h.includes("iletisim turu"));
-    const longNoIdx = header.findIndex((h) => h.includes("uzun tn./no.") || h.includes("uzun tn./no") || h.includes("uzun tn") || h.includes("uzun tn no"));
-    const systemIdx = header.findIndex((h) => h.includes("sistem taniticisi"));
+    const isHeaderSheet = header.some((h) => h.includes("personel numarasi"));
 
+    const nameIdx = isHeaderSheet ? header.findIndex((h) => h.includes("personel numarasi")) : 1;
+    const commIdx = isHeaderSheet ? header.findIndex((h) => h.includes("iletisim turu")) : 6;
+    const systemIdx = isHeaderSheet ? header.findIndex((h) => h.includes("sistem taniticisi")) : 7;
+
+    const phoneCandidateIndexes = isHeaderSheet
+      ? header
+          .map((h, idx) => ({ h, idx }))
+          .filter(({ h }) =>
+            h.includes("uzun tn") ||
+            h.includes("telefon") ||
+            h.includes("dahili") ||
+            h.includes("kisa kod") ||
+            h.includes("tn./no"),
+          )
+          .map(({ idx }) => idx)
+      : [7, 8];
+
+    const startRow = isHeaderSheet ? 1 : 0;
     if (nameIdx === -1) continue;
 
-    for (let i = 1; i < rows.length; i += 1) {
+    for (let i = startRow; i < rows.length; i += 1) {
       const row = rows[i] ?? [];
       const nameRaw = String(row[nameIdx] ?? "").trim();
       if (!nameRaw) continue;
       const key = nameRaw.toLocaleUpperCase("tr-TR");
 
       const commRaw = normalize(String(commIdx >= 0 ? row[commIdx] ?? "" : ""));
-      const longNo = String(longNoIdx >= 0 ? row[longNoIdx] ?? "" : "").trim();
       const systemNo = String(systemIdx >= 0 ? row[systemIdx] ?? "" : "").trim();
 
-      let candidate = "";
-      let score = 0;
+      const phoneValues = phoneCandidateIndexes
+        .map((idx) => String(row[idx] ?? ""))
+        .filter(Boolean);
 
-      if (looksLikePhone(longNo)) {
-        candidate = longNo;
-        score = commPriority[commRaw] ?? 50;
-      } else if (/^\d+$/.test(systemNo)) {
-        candidate = systemNo;
-        score = 10;
-      }
+      const primary = pickBestPhone(phoneValues, commRaw);
+      const fallback = /^\d+$/.test(systemNo) ? { phone: systemNo, score: 10 } : null;
+      const best = primary ?? fallback;
 
-      if (!candidate) continue;
+      if (!best) continue;
 
       const prev = result.get(key);
-      if (!prev || score > prev.score) {
-        result.set(key, { score, phone: candidate });
+      if (!prev || best.score > prev.score) {
+        result.set(key, { score: best.score, phone: best.phone });
       }
     }
   }
