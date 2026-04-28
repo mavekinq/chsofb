@@ -396,7 +396,7 @@ const MainMenu = () => {
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-2xl border border-white/10 bg-background/60 p-4 backdrop-blur-sm">
-                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Aktif Hizmet</p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Verilen Hizmet</p>
                     <p className="mt-2 font-heading text-4xl text-primary">{summaryLoading ? "..." : dashboardSummary.activeServices}</p>
                     <p className="mt-1 text-xs text-muted-foreground">Operasyon akışındaki açık kayıtlar</p>
                   </div>
