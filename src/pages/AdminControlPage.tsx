@@ -258,6 +258,25 @@ const AdminControlPage = () => {
     () => new Set(Array.from(activeShiftStaffNames).filter((name) => activeScheduleStaffNames.has(name))),
     [activeShiftStaffNames, activeScheduleStaffNames],
   );
+  const onShiftOfbCount = useMemo(() => {
+    const names = new Set<string>();
+
+    for (const employee of schedulePayload.employees) {
+      const staffKey = normalizeStaffName(employee.name);
+      if (!validatedActiveStaffNames.has(staffKey)) {
+        continue;
+      }
+
+      const positionText = `${employee.group} ${employee.team} ${employee.rawTeam}`.toLocaleLowerCase("tr");
+      if (!positionText.includes("ofb")) {
+        continue;
+      }
+
+      names.add(staffKey);
+    }
+
+    return names.size;
+  }, [schedulePayload.employees, validatedActiveStaffNames]);
   const shiftPerformance = useMemo(() => {
     const performanceMap = new Map<string, {
       staffName: string;
@@ -1079,14 +1098,14 @@ const AdminControlPage = () => {
                   <div key={terminal} className="rounded-xl border border-border bg-background/60 p-4">
                     <p className="text-xs text-muted-foreground">{terminal}</p>
                     <p className="mt-2 text-2xl font-semibold">{count}</p>
-                    <p className="text-xs text-muted-foreground">aktif WCH hizmet</p>
+                    <p className="text-xs text-muted-foreground">verilen WCH hizmeti</p>
                   </div>
                 ))
               )}
             </div>
 
             <div className="space-y-3">
-              <p className="text-sm font-medium">Anlık Hizmet Verilen Uçaklar</p>
+              <p className="text-sm font-medium">En son Hizmet Verilen Uçaklar</p>
               {todayServices.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Bugün açılmış hizmet kaydı bulunmuyor.</div>
               ) : (
@@ -1114,7 +1133,10 @@ const AdminControlPage = () => {
 
           <div className="space-y-4">
             <div className="space-y-3">
-              <p className="text-sm font-medium">Vardiyadaki Kontuar Personelleri</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium">Vardiyadaki Kontuar Personelleri</p>
+                <Badge variant="secondary">On-shift OFB: {onShiftOfbCount}</Badge>
+              </div>
               {shiftPerformance.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Aktif üretim verisi yok.</div>
               ) : (
