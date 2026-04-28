@@ -98,10 +98,10 @@ function parseDirectoryWorkbook(arrayBuffer: ArrayBuffer): Map<string, string> {
     if (rows.length < 2) continue;
 
     const header = rows[0].map((v) => normalize(String(v ?? "")));
-    const nameIdx = header.findIndex((h) => h.includes("personel numarası"));
-    const commIdx = header.findIndex((h) => h.includes("iletişim türü") || h.includes("iletisim turu"));
+    const nameIdx = header.findIndex((h) => h.includes("personel numarasi"));
+    const commIdx = header.findIndex((h) => h.includes("iletisim turu"));
     const longNoIdx = header.findIndex((h) => h.includes("uzun tn./no.") || h.includes("uzun tn./no") || h.includes("uzun tn") || h.includes("uzun tn no"));
-    const systemIdx = header.findIndex((h) => h.includes("sistem tanıtıcısı") || h.includes("sistem taniticisi"));
+    const systemIdx = header.findIndex((h) => h.includes("sistem taniticisi"));
 
     if (nameIdx === -1) continue;
 
