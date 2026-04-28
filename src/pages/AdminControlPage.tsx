@@ -232,28 +232,28 @@ const AdminControlPage = () => {
     () => new Set(activeShiftRows.map((item) => normalizeStaffName(item.staff_name))),
     [activeShiftRows],
   );
-  const activeScheduleStaffNames = useMemo(() => {
+  const activeScheduleEmployees = useMemo(() => {
     const todayIndex = schedulePayload.weekDates.indexOf(todayKey);
     const previousDayKey = todayIndex > 0 ? schedulePayload.weekDates[todayIndex - 1] : null;
 
     if (todayIndex === -1) {
-      return new Set<string>();
+      return [];
     }
 
-    return new Set(
-      schedulePayload.employees
-        .filter((employee) => {
-          const todayShift = employee.shifts[todayKey] || "";
-          const previousShift = previousDayKey ? employee.shifts[previousDayKey] || "" : "";
+    return schedulePayload.employees.filter((employee) => {
+      const todayShift = employee.shifts[todayKey] || "";
+      const previousShift = previousDayKey ? employee.shifts[previousDayKey] || "" : "";
 
-          return Boolean(
-            isActiveForToday(todayShift, minuteNow)
-            || (previousDayKey && isActiveFromPreviousDayOvernight(previousShift, minuteNow)),
-          );
-        })
-        .map((employee) => normalizeStaffName(employee.name)),
-    );
+      return Boolean(
+        isActiveForToday(todayShift, minuteNow)
+        || (previousDayKey && isActiveFromPreviousDayOvernight(previousShift, minuteNow)),
+      );
+    });
   }, [minuteNow, schedulePayload.employees, schedulePayload.weekDates, todayKey]);
+  const activeScheduleStaffNames = useMemo(
+    () => new Set(activeScheduleEmployees.map((employee) => normalizeStaffName(employee.name))),
+    [activeScheduleEmployees],
+  );
   const validatedActiveStaffNames = useMemo(
     () => new Set(Array.from(activeShiftStaffNames).filter((name) => activeScheduleStaffNames.has(name))),
     [activeShiftStaffNames, activeScheduleStaffNames],
@@ -261,12 +261,8 @@ const AdminControlPage = () => {
   const onShiftOfbCount = useMemo(() => {
     const names = new Set<string>();
 
-    for (const employee of schedulePayload.employees) {
+    for (const employee of activeScheduleEmployees) {
       const staffKey = normalizeStaffName(employee.name);
-      if (!validatedActiveStaffNames.has(staffKey)) {
-        continue;
-      }
-
       const positionText = `${employee.group} ${employee.team} ${employee.rawTeam}`.toLocaleLowerCase("tr");
       if (!positionText.includes("ofb")) {
         continue;
@@ -276,7 +272,7 @@ const AdminControlPage = () => {
     }
 
     return names.size;
-  }, [schedulePayload.employees, validatedActiveStaffNames]);
+  }, [activeScheduleEmployees]);
   const shiftPerformance = useMemo(() => {
     const performanceMap = new Map<string, {
       staffName: string;
