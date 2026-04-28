@@ -786,7 +786,7 @@ const AdminControlPage = () => {
 
       await mergeAndSaveSchedulePayload(nextPayload);
       await refreshScheduleState();
-      toast.success("Yeni haftanin calisma programi guncellendi");
+      toast.success("Program guncellendi: yeni tarihler mevcut programa eklendi");
     } catch {
       toast.error("Dosya okunamadi veya Excel/JSON formati hatali");
     } finally {
@@ -1361,9 +1361,9 @@ const AdminControlPage = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <DatabaseZap className="w-4 h-4 text-primary" />
-              Yeni Haftanin Calisma Programini Yukle
+              Haftalik Calisma Programini Guncelle
             </CardTitle>
-            <CardDescription>Yeni hafta `.xlsx` veya mevcut JSON dosyasini secince uygulamadaki calisma programi aninda guncellenir.</CardDescription>
+            <CardDescription>Yeni `.xlsx` veya JSON yuklediginde mevcut tarihler korunur, dosyadaki yeni tarihler programa eklenir.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <Input
@@ -1381,7 +1381,7 @@ const AdminControlPage = () => {
               <CalendarDays className="h-4 w-4" />
               <AlertTitle>{hasCustomSchedule ? "Ozel hafta aktif" : "Varsayilan hafta aktif"}</AlertTitle>
               <AlertDescription>
-                Excel veya JSON yuklemesi tarayicida saklanir. Ayni cihaz ve tarayicida calisma programi sayfasi yeni veriyi kullanir.
+                Yukleme sonrasi birlesik program hem yerelde hem merkezi kayitta saklanir. Onceki versiyonlar Program sayfasindaki Gecmis Programlar panelinden geri acilabilir.
               </AlertDescription>
             </Alert>
             <div className="flex flex-wrap gap-2">
