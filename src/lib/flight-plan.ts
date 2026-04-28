@@ -11,9 +11,8 @@ export interface FlightPlanEntry {
   specialNotes: string;
 }
 
-// Yeni Google Sheet ID ile güncellendi
 const SHEET_URL =
-  "https://docs.google.com/spreadsheets/d/171G8dMhMLTkTEOayurEhVB8KFXmiuvLymk9XvdBhfzA/export?format=csv";
+  "https://docs.google.com/spreadsheets/d/1-UVsf1_jZ_n_CPGqieMMWgMpbVnzzchuvexrseNUSqg/export?format=csv";
 
 const FLIGHT_CODE_ALIASES: Record<string, string[]> = {
   PC: ["PGT"],
