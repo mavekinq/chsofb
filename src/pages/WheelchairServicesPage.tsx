@@ -414,17 +414,29 @@ const WheelchairServicesPage = () => {
     return diffMinutes <= COUNTER_CLOSE_MINUTES[terminal];
   };
 
-  // Yeni filtre: Sadece departure destinasyonu olanlar ve domestic ise T1, değilse T2
+  // Filtreye takılan uçakları ve nedenini de döndür
   const getTerminalFlights = (terminal: string) => {
-    return flights.filter((flight) => {
-      // Sadece departure destinasyonu (arr_iata) varsa
-      if (!flight.arr_iata) return false;
-      // Domestic ise T1, değilse T2
-      const isDomestic = DOMESTIC_AIRPORT_CODES.has(flight.arr_iata.toUpperCase());
-      if (terminal === "T1" && isDomestic) return true;
-      if (terminal === "T2" && !isDomestic) return true;
-      return false;
-    });
+    const passed = [];
+    const failed = [];
+    for (const flight of flights) {
+      let reason = "";
+      if (!flight.arr_iata) {
+        reason = "departure destinasyonu yok";
+      } else {
+        const isDomestic = DOMESTIC_AIRPORT_CODES.has(flight.arr_iata.toUpperCase());
+        if (terminal === "T1" && !isDomestic) {
+          reason = "domestic değil";
+        } else if (terminal === "T2" && isDomestic) {
+          reason = "domestic";
+        }
+      }
+      if (!reason) {
+        passed.push(flight);
+      } else {
+        failed.push({ flight, reason });
+      }
+    }
+    return { passed, failed };
   };
 
   const handleAddService = async (flight: Flight, wheelchairId: string, passengerType: string, notes: string, assignedStaff: string) => {
@@ -543,7 +555,7 @@ const WheelchairServicesPage = () => {
     }
   };
 
-  const filteredFlights = getTerminalFlights(activeTab);
+  const { passed: filteredFlights, failed: failedFlights } = getTerminalFlights(activeTab);
   const flightLookup = useMemo(() => {
     const lookup = new Map<string, Flight>();
 
@@ -871,6 +883,24 @@ const WheelchairServicesPage = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Filtreye takılan uçuşlar */}
+                {failedFlights.length > 0 && (
+                  <div className="mt-8">
+                    <h4 className="font-heading font-semibold mb-2 text-red-700">Filtreye Takılan Uçuşlar</h4>
+                    <div className="space-y-2">
+                      {failedFlights.map(({ flight, reason }) => (
+                        <Card key={flight.flight_iata + reason} className="border-l-4 border-l-red-400 bg-red-50/60">
+                          <CardContent className="py-2 flex items-center gap-4">
+                            <span className="font-mono text-sm text-red-800 min-w-[90px]">{flight.airline_iata} {flight.flight_number}</span>
+                            <span className="text-xs text-red-700">{reason}</span>
+                            <span className="text-xs text-muted-foreground">{flight.dep_iata} → {flight.arr_iata || '—'}</span>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </TabsContent>
           ))}
