@@ -218,10 +218,11 @@ const MainMenu = () => {
       setSummaryLoading(true);
 
       const todayStartIso = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      const SERVICE_COMPLETED_TAG = "[HIZMET_TAMAMLANDI]";
 
       const [servicesResult, servicesOpenedTodayResult, wheelchairsResult, flightEntries] = await Promise.all([
-        supabase.from("wheelchair_services").select("id"),
-        supabase.from("wheelchair_services").select("id").gte("created_at", todayStartIso),
+        supabase.from("wheelchair_services").select("id, notes"),
+        supabase.from("wheelchair_services").select("id, notes").gte("created_at", todayStartIso),
         supabase.from("wheelchairs").select("id, status"),
         fetchFlightPlanEntries(),
       ]);
@@ -238,9 +239,17 @@ const MainMenu = () => {
       const arrivalFlights = flightEntries.filter((entry) => entry.arrivalCode).length;
       const departureFlights = flightEntries.filter((entry) => entry.departureCode).length;
 
+      // Filter out completed services
+      const activeServices = (servicesResult.data ?? []).filter(
+        (service) => !String(service.notes || "").includes(SERVICE_COMPLETED_TAG)
+      ).length;
+      const openedServicesToday = (servicesOpenedTodayResult.data ?? []).filter(
+        (service) => !String(service.notes || "").includes(SERVICE_COMPLETED_TAG)
+      ).length;
+
       setDashboardSummary({
-        activeServices: servicesResult.data?.length ?? 0,
-        openedServicesToday: servicesOpenedTodayResult.data?.length ?? 0,
+        activeServices,
+        openedServicesToday,
         missingWheelchairs: wheelchairsResult.data?.filter((wheelchair) => wheelchair.status === "missing").length ?? 0,
         arrivalFlights,
         departureFlights,
