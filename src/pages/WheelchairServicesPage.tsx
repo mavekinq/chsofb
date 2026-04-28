@@ -375,10 +375,20 @@ const WheelchairServicesPage = () => {
     };
   }, []);
 
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleTimeString('tr-TR', {
-      hour: '2-digit',
-      minute: '2-digit'
+  const formatFlightTime = (flight: Flight) => {
+    const rawTime = String(flight.dep_estimated || flight.dep_time || "").trim();
+    const parsedMinutes = parseDepartureMinutes(rawTime);
+
+    if (parsedMinutes !== null) {
+      const hours = Math.floor(parsedMinutes / 60).toString().padStart(2, "0");
+      const minutes = (parsedMinutes % 60).toString().padStart(2, "0");
+      return `${hours}:${minutes}`;
+    }
+
+    const timestamp = flight.dep_estimated_ts || flight.dep_time_ts;
+    return new Date(timestamp * 1000).toLocaleTimeString("tr-TR", {
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -791,7 +801,7 @@ const WheelchairServicesPage = () => {
                                 </div>
                                 <div className="text-right flex-shrink-0">
                                   <div className={`text-sm font-mono font-bold ${isUrgent ? 'text-red-700' : 'text-foreground'}`}>
-                                    {formatTime(depTime)}
+                                    {formatFlightTime(flight)}
                                   </div>
                                   <div className="mt-1 flex flex-col items-end gap-1">
                                     <Badge

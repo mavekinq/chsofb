@@ -533,34 +533,6 @@ const AdminControlPage = () => {
     );
   };
 
-  const handleExportDayEndReport = () => {
-    const reportDate = now.toLocaleDateString("tr-TR");
-    const lines = [
-      `Wheelie Watch Pro - Gun Sonu Raporu (${reportDate})`,
-      "",
-      `Toplam hizmet: ${todayServices.length}`,
-      `Eksik sandalye: ${missingWheelchairs.length}`,
-      `Bakim bekleyen sandalye: ${maintenanceWheelchairs.length}`,
-      `Aktif vardiya: ${activeShiftRows.length}`,
-      `Aktif abone: ${summary.activeSubscribers}`,
-      `Vardiyada bildirim alabilen: ${summary.onShiftSubscribers}`,
-      "",
-      "GUN SONU KPI OZETI:",
-      ...dayEndMetrics.map((metric) => `- ${metric.title}: ${metric.value} | ${metric.detail}`),
-      "",
-      "UYARI MERKEZI:",
-      ...operationalAlerts.map((alert) => `- [${alert.level.toUpperCase()}] ${alert.title} - ${alert.detail}`),
-    ];
-
-    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `gun-sonu-raporu-${now.toISOString().slice(0, 10)}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
   const handleSyncGoogleSheets = async (silent = false) => {
     if (syncingGoogleSheets) {
       return;
@@ -1345,9 +1317,6 @@ const AdminControlPage = () => {
               <CardHeader>
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle>Operasyon Gün Sonu Özeti</CardTitle>
-                  <Button type="button" variant="outline" size="sm" onClick={handleExportDayEndReport}>
-                    Raporu Indir
-                  </Button>
                 </div>
                 <CardDescription>Diger gunlere gore yuzdelik degisim ozeti.</CardDescription>
               </CardHeader>
