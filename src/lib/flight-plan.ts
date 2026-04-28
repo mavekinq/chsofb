@@ -247,7 +247,7 @@ export const fetchFlightPlanEntriesForDate = async (snapshotDate: string) => {
 };
 
 /**
- * Bugünün snapshot'ını (00:05'te alınan) ile canlı CSV verisini birleştirir.
+ * Bugünün snapshot'ını (23:50'de alınan son CSV kaydı) ile canlı CSV verisini birleştirir.
  * Snapshot'taki uçuşlar korunur (Google Sheet güncellenip silinse bile),
  * şu adık hiç snapshot yoksa veya snapshot'ta bulunmayan yeni uçuşlar
  * canlı CSV'den eklenir. Böylece gün içi süreklilik sağlanır.
