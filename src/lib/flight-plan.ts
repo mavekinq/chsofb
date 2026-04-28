@@ -202,6 +202,17 @@ export const getIstanbulDateKey = (value = new Date()) => {
   return formatter.format(value);
 };
 
+const getIstanbulNowMinutes = (value = new Date()) => {
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Istanbul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const [hour, minute] = formatter.format(value).split(":").map(Number);
+  return (hour || 0) * 60 + (minute || 0);
+};
+
 const isFlightPlanEntry = (value: unknown): value is FlightPlanEntry => {
   if (!value || typeof value !== "object") {
     return false;
@@ -268,6 +279,8 @@ export const fetchFlightPlanEntriesForDate = async (snapshotDate: string) => {
 export const fetchFlightPlanEntriesMergedWithWindow = async (): Promise<FlightPlanMergeResult> => {
   const today = getIstanbulDateKey();
   const yesterday = getIstanbulDateKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
+  const istanbulNowMinutes = getIstanbulNowMinutes();
+  const shouldShowCarryoverFromYesterday = istanbulNowMinutes < 60;
   const liveEntries = await fetchFlightPlanEntries();
   const [todaySnapshotResponse, yesterdaySnapshotResponse] = await Promise.all([
     supabase
@@ -297,9 +310,11 @@ export const fetchFlightPlanEntriesMergedWithWindow = async (): Promise<FlightPl
   // Bugüne ait snapshot yoksa canlı veri temel alınır
   if (snapshotResult.length === 0) {
     const liveKeys = new Set(liveEntries.map(getSnapshotEntryKey));
-    const carryoverEntries = carryoverCandidateEntries
-      .filter((entry) => !liveKeys.has(getSnapshotEntryKey(entry)))
-      .sort((a, b) => (parseDepartureMinutes(a.departureTime) ?? 9999) - (parseDepartureMinutes(b.departureTime) ?? 9999));
+    const carryoverEntries = shouldShowCarryoverFromYesterday
+      ? carryoverCandidateEntries
+        .filter((entry) => !liveKeys.has(getSnapshotEntryKey(entry)))
+        .sort((a, b) => (parseDepartureMinutes(a.departureTime) ?? 9999) - (parseDepartureMinutes(b.departureTime) ?? 9999))
+      : [];
 
     return {
       entries: [...carryoverEntries, ...liveEntries],
@@ -340,9 +355,11 @@ export const fetchFlightPlanEntriesMergedWithWindow = async (): Promise<FlightPl
 
   const mergedTodayEntries = [...liveEntries, ...sortedSnapshotOnlyEntries];
   const mergedTodayKeys = new Set(mergedTodayEntries.map(getSnapshotEntryKey));
-  const carryoverEntries = carryoverCandidateEntries
-    .filter((entry) => !mergedTodayKeys.has(getSnapshotEntryKey(entry)))
-    .sort((a, b) => (parseDepartureMinutes(a.departureTime) ?? 9999) - (parseDepartureMinutes(b.departureTime) ?? 9999));
+  const carryoverEntries = shouldShowCarryoverFromYesterday
+    ? carryoverCandidateEntries
+      .filter((entry) => !mergedTodayKeys.has(getSnapshotEntryKey(entry)))
+      .sort((a, b) => (parseDepartureMinutes(a.departureTime) ?? 9999) - (parseDepartureMinutes(b.departureTime) ?? 9999))
+    : [];
 
   // Akış: dünden devreden 00:00-00:45 uçuşları en üstte, bugünün akışı altında devam eder.
   return {
