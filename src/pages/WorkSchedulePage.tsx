@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { CalendarDays, History, RotateCcw } from "lucide-react";
 import {
   getStoredSchedulePayload,
-  isCustomSchedulePayload,
   loadScheduleHistory,
   loadSchedulePayload,
   saveSchedulePayload,
@@ -288,14 +287,6 @@ const WorkSchedulePage = () => {
             <p className="text-xs text-muted-foreground">{isNowMode ? "Aktif Personel" : "Secili Gun Personel"}</p>
             <p className="text-2xl font-heading font-bold text-primary">{isNowMode ? activeNow.length : selectedDayCount}</p>
           </div>
-        </div>
-
-        <div className="bg-card border border-border rounded-lg p-4 mb-4 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs text-muted-foreground">Veri Kaynagi</p>
-            <p className="font-medium">{isCustomSchedulePayload(payload) ? "Supabase merkezi haftalik program" : "Varsayilan haftalik program"}</p>
-          </div>
-          <p className="text-sm text-muted-foreground">{payload.weekDates[0] && payload.weekDates[payload.weekDates.length - 1] ? `${payload.weekDates[0]} - ${payload.weekDates[payload.weekDates.length - 1]}` : "Hafta verisi yok"}</p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-1 mb-4">
