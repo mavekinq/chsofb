@@ -1047,8 +1047,13 @@ const WheelchairServicesPage = () => {
         .toLocaleLowerCase("tr")
         .includes(q);
     });
-    // Keep terminal lists in the exact merged CSV order.
-    return flts.sort((a, b) => a.list_order - b.list_order);
+    // Keep merged order within each day-offset group, but always render next-day flights as one trailing block.
+    return flts.sort((a, b) => {
+      if (a.dep_day_offset !== b.dep_day_offset) {
+        return a.dep_day_offset - b.dep_day_offset;
+      }
+      return a.list_order - b.list_order;
+    });
   }, [filteredFlights, q]);
 
   // Tab counts
