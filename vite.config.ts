@@ -31,8 +31,8 @@ export default defineConfig(({ mode }) => ({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "robots.txt", "celebi-logo.png"],
       manifest: {
-        name: "Wheelie Watch Pro",
-        short_name: "Wheelie Watch",
+        name: "Çelebi OFB",
+        short_name: "ÇHS OFB",
         description: "Tekerlekli sandalye operasyon ve hizmet takip uygulaması.",
         theme_color: "#0f766e",
         background_color: "#ffffff",
