@@ -938,10 +938,6 @@ const AdminControlPage = () => {
         throw error;
       }
 
-      const nextBriefings = [title, ...briefingDraft.split("\n").map((item) => item.trim()).filter(Boolean)].slice(0, 8);
-      await saveBriefings(nextBriefings);
-      setBriefingDraft(nextBriefings.join("\n"));
-      setCustomBriefingsActive(isCustomBriefings(nextBriefings));
       setAnnouncementBody("");
       toast.success("Duyuru tüm cihazlara gönderildi");
     } catch (error) {
