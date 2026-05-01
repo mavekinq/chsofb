@@ -74,39 +74,51 @@ const WheelchairCard = ({ wheelchair, onStatusChange, onLocationChange, onNoteCh
         </p>
       ) : null}
 
-      <div className="mt-3 grid grid-cols-2 gap-2 md:hidden">
-        <Button
-          size="sm"
-          variant={wheelchair.status === "available" ? "default" : "outline"}
-          className="text-xs"
-          onClick={() => onStatusChange(wheelchair.id, "available")}
-        >
-          ✅ Musait
-        </Button>
-        <Button
-          size="sm"
-          variant={wheelchair.status === "missing" ? "default" : "outline"}
-          className="text-xs"
-          onClick={() => onStatusChange(wheelchair.id, "missing")}
-        >
-          🔴 Eksik
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="text-xs"
-          onClick={() => onLocationChange(wheelchair.id)}
-        >
-          📍 Konum Ata
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="text-xs"
-          onClick={() => onNoteChange(wheelchair.id)}
-        >
-          📝 Not Ekle
-        </Button>
+      <div className="mt-4 space-y-2 md:hidden">
+        <div className="grid grid-cols-3 gap-2">
+          <Button
+            size="default"
+            variant={wheelchair.status === "available" ? "default" : "outline"}
+            className="h-10 text-xs font-medium"
+            onClick={() => onStatusChange(wheelchair.id, "available")}
+          >
+            ✅ Müsait
+          </Button>
+          <Button
+            size="default"
+            variant={wheelchair.status === "missing" ? "default" : "outline"}
+            className="h-10 text-xs font-medium"
+            onClick={() => onStatusChange(wheelchair.id, "missing")}
+          >
+            🔴 Eksik
+          </Button>
+          <Button
+            size="default"
+            variant={wheelchair.status === "maintenance" ? "default" : "outline"}
+            className="h-10 text-xs font-medium"
+            onClick={() => onStatusChange(wheelchair.id, "maintenance")}
+          >
+            🟠 Bakımda
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            size="default"
+            variant="outline"
+            className="h-10 text-xs font-medium"
+            onClick={() => onLocationChange(wheelchair.id)}
+          >
+            📍 Konum
+          </Button>
+          <Button
+            size="default"
+            variant="outline"
+            className="h-10 text-xs font-medium"
+            onClick={() => onNoteChange(wheelchair.id)}
+          >
+            📝 Not
+          </Button>
+        </div>
       </div>
     </div>
   );
