@@ -14,7 +14,6 @@ import { toast } from "sonner";
 
 type DashboardSummary = {
   activeServices: number;
-  openedServicesToday: number;
   missingWheelchairs: number;
   arrivalFlights: number;
   departureFlights: number;
@@ -73,7 +72,6 @@ const MainMenu = () => {
   const [newsError, setNewsError] = useState("");
   const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary>({
     activeServices: 0,
-    openedServicesToday: 0,
     missingWheelchairs: 0,
     arrivalFlights: 0,
     departureFlights: 0,
@@ -217,12 +215,8 @@ const MainMenu = () => {
     const loadDashboardSummary = async () => {
       setSummaryLoading(true);
 
-      const todayStartIso = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-      const SERVICE_COMPLETED_TAG = "[HIZMET_TAMAMLANDI]";
-
-      const [servicesResult, servicesOpenedTodayResult, wheelchairsResult, flightEntries] = await Promise.all([
-        supabase.from("wheelchair_services").select("id, notes"),
-        supabase.from("wheelchair_services").select("id, notes").gte("created_at", todayStartIso),
+      const [servicesResult, wheelchairsResult, flightEntries] = await Promise.all([
+        supabase.from("wheelchair_services").select("id", { count: "exact", head: true }),
         supabase.from("wheelchairs").select("id, status"),
         fetchFlightPlanEntries(),
       ]);
@@ -231,7 +225,7 @@ const MainMenu = () => {
         return;
       }
 
-      if (servicesResult.error || wheelchairsResult.error || servicesOpenedTodayResult.error) {
+      if (servicesResult.error || wheelchairsResult.error) {
         setSummaryLoading(false);
         return;
       }
@@ -239,17 +233,8 @@ const MainMenu = () => {
       const arrivalFlights = flightEntries.filter((entry) => entry.arrivalCode).length;
       const departureFlights = flightEntries.filter((entry) => entry.departureCode).length;
 
-      // Filter out completed services
-      const activeServices = (servicesResult.data ?? []).filter(
-        (service) => !String(service.notes || "").includes(SERVICE_COMPLETED_TAG)
-      ).length;
-      const openedServicesToday = (servicesOpenedTodayResult.data ?? []).filter(
-        (service) => !String(service.notes || "").includes(SERVICE_COMPLETED_TAG)
-      ).length;
-
       setDashboardSummary({
-        activeServices,
-        openedServicesToday,
+        activeServices: servicesResult.count ?? 0,
         missingWheelchairs: wheelchairsResult.data?.filter((wheelchair) => wheelchair.status === "missing").length ?? 0,
         arrivalFlights,
         departureFlights,
