@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { hasAdminCredentials, isAdminUsername, isValidAdminPassword } from "@/lib/admin-auth";
 import { loadSchedulePayload } from "@/lib/work-schedule";
+import { ensurePushSubscription } from "@/lib/notifications";
 
 type StoredStaffUser = {
   id: string;
@@ -15,6 +16,13 @@ type StoredStaffUser = {
   security_number: string;
   notification_enabled: boolean;
   updated_at: string;
+};
+
+type AuthUserRecord = {
+  id: string;
+  full_name: string;
+  security_number: string;
+  notification_enabled: boolean;
 };
 
 const LOCAL_USERS_KEY = "staffAuthUsers";
@@ -82,9 +90,9 @@ const stepMeta = {
     icon: ShieldCheck,
   },
   notification: {
-    label: "Bildirim Ayari",
-    title: "Bildirim Tercihi",
-    description: "Ucus ve hizmet akisini anlik almak icin bildirim iznini burada belirleyebilirsin.",
+    label: "KVKK ve Bildirim",
+    title: "KVKK ve Bildirim Onayi",
+    description: "Devam etmek icin KVKK metnini onaylayip bildirim iznini etkinlestirmen gerekiyor.",
     icon: Bell,
   },
   "security-number": {
@@ -107,8 +115,9 @@ const Login = () => {
   const [fullName, setFullName] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [securityNumber, setSecurityNumber] = useState("");
+  const [kvkkAccepted, setKvkkAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [foundUser, setFoundUser] = useState<any>(null);
+  const [foundUser, setFoundUser] = useState<AuthUserRecord | null>(null);
   const [isFirstLogin, setIsFirstLogin] = useState(false);
   const [useLocalUserStore, setUseLocalUserStore] = useState(false);
   const currentStepMeta = stepMeta[step];
@@ -118,6 +127,7 @@ const Login = () => {
     setFullName("");
     setAdminPassword("");
     setSecurityNumber("");
+    setKvkkAccepted(false);
     setFoundUser(null);
     setIsFirstLogin(false);
     setStep("name");
@@ -227,11 +237,11 @@ const Login = () => {
       setFoundUser(existingUser);
 
       if (existingUser) {
-        // Existing user - ask for security number
+        // Existing user without notification permission must complete consent first.
         setIsFirstLogin(false);
-        setStep("existing-security-number");
+        setStep(existingUser.notification_enabled ? "existing-security-number" : "notification");
       } else {
-        // First login - ask for notification permission
+        // First login - must complete consent card before security number.
         setIsFirstLogin(true);
         setStep("notification");
       }
@@ -264,21 +274,42 @@ const Login = () => {
   const handleNotificationPermission = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!kvkkAccepted) {
+      toast.error("Devam etmek icin KVKK onayini vermelisin");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Request notification permission
-      if ("Notification" in window) {
-        if (Notification.permission === "default") {
-          const permission = await Notification.requestPermission();
-          if (permission !== "granted") {
-            toast.warning("Bildirim izni verilmedi (isteğe bağlı)");
-          }
+      await ensurePushSubscription(fullName || "Personel");
+
+      if (isFirstLogin) {
+        setStep("security-number");
+        return;
+      }
+
+      if (useLocalUserStore) {
+        const nextUsers = readLocalUsers().map((item) =>
+          item.full_name === fullName
+            ? { ...item, notification_enabled: true, updated_at: new Date().toISOString() }
+            : item
+        );
+        writeLocalUsers(nextUsers);
+      } else if (foundUser?.id) {
+        const { error } = await supabase
+          .from("users")
+          .update({ notification_enabled: true, updated_at: new Date().toISOString() })
+          .eq("id", foundUser.id);
+
+        if (error) {
+          toast.error("Bildirim ayari kaydedilemedi: " + error.message);
+          return;
         }
       }
 
-      // Move to security number step
-      setStep("security-number");
+      setFoundUser((prev) => (prev ? { ...prev, notification_enabled: true } : prev));
+      setStep("existing-security-number");
     } finally {
       setLoading(false);
     }
@@ -445,7 +476,7 @@ const Login = () => {
                 <p className="text-xs uppercase tracking-[0.24em] text-white/50">Nasil Calisir</p>
                 <ul className="mt-4 space-y-3 text-sm text-white/78">
                   <li>Ad soyad vardiya ve yuklu program ile eslestirilir.</li>
-                  <li>Ilk giriste bildirim tercihi ve 8 haneli sicil no alinir.</li>
+                  <li>Ilk giriste KVKK ve bildirim onayi zorunlu olarak alinir.</li>
                   <li>Sonraki girisler tek adimda sicil dogrulamasi ile ilerler.</li>
                 </ul>
               </div>
@@ -561,22 +592,29 @@ const Login = () => {
               <form onSubmit={handleNotificationPermission} className="space-y-4">
                 <div className="rounded-2xl border border-dashed border-primary/25 bg-primary/5 p-5 text-center">
                   <Bell className="mx-auto mb-3 h-9 w-9 text-primary" />
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    Uçuş ve hizmet bildirimleri alacaksın
-                  </p>
+                  <p className="text-sm leading-6 text-muted-foreground">KVKK onayini verip cihazda bildirimleri etkinlestir.</p>
                 </div>
 
-                <Button type="submit" disabled={loading} className="h-11 w-full rounded-xl text-sm font-medium">
-                  {loading ? "Hazırlanıyor..." : "İzin Ver ve Devam Et"}
-                </Button>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
+                  <p className="text-sm font-medium text-foreground/90">KVKK Aydinlatma Onayi</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Kisisel verilerimin operasyonel surecler icin islenmesine ve bildirim gonderimi kapsaminda kullanilmasina iliskin aydinlatma metnini okudum ve onayliyorum.
+                  </p>
+                  <label className="mt-3 inline-flex items-start gap-2 text-xs text-foreground/90">
+                    <input
+                      type="checkbox"
+                      checked={kvkkAccepted}
+                      onChange={(event) => setKvkkAccepted(event.target.checked)}
+                      disabled={loading}
+                      className="mt-0.5 h-4 w-4 rounded border-white/20 bg-transparent"
+                    />
+                    KVKK aydinlatma metnini okudum, kabul ediyorum.
+                  </label>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => setStep("security-number")}
-                  className="w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  Şimdi vermiyorum
-                </button>
+                <Button type="submit" disabled={loading || !kvkkAccepted} className="h-11 w-full rounded-xl text-sm font-medium">
+                  {loading ? "Hazırlanıyor..." : "Onayla ve Devam Et"}
+                </Button>
               </form>
             </>
           )}
