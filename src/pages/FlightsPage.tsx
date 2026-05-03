@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Plane, ArrowLeft, Clock, MapPin, AlertTriangle } from "lucide-react";
+import { Search, Plane, ArrowLeft, Clock, MapPin, AlertTriangle, Filter } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -33,6 +33,7 @@ const FlightsPage = () => {
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState(getIstanbulDateKey());
   const [search, setSearch] = useState("");
+  const [showSpecialOnly, setShowSpecialOnly] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -79,9 +80,15 @@ const FlightsPage = () => {
     });
   };
 
-  const filtered = flights.filter((f) =>
-    Object.values(f).some((v) => v.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = flights.filter((f) => {
+    const matchesSearch = Object.values(f).some((v) => v.toLowerCase().includes(search.toLowerCase()));
+    const specialNotesNormalized = f.specialNotes.toLowerCase();
+    const matchesSpecial =
+      !showSpecialOnly ||
+      specialNotesNormalized.includes("wch") ||
+      specialNotesNormalized.includes("whc");
+    return matchesSearch && matchesSpecial;
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -113,7 +120,7 @@ const FlightsPage = () => {
               className="pl-9 bg-secondary border-border"
             />
           </div>
-          <div className="w-full max-w-xs">
+          <div className="flex w-full max-w-xs gap-2">
             <Select value={selectedDate} onValueChange={setSelectedDate}>
               <SelectTrigger className="bg-secondary border-border">
                 <SelectValue placeholder="Tarih seçin" />
@@ -126,6 +133,15 @@ const FlightsPage = () => {
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              type="button"
+              variant={showSpecialOnly ? "default" : "outline"}
+              className="shrink-0"
+              onClick={() => setShowSpecialOnly((prev) => !prev)}
+            >
+              <Filter className="w-4 h-4 mr-1" />
+              Filtre
+            </Button>
           </div>
         </div>
 
