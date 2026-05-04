@@ -281,18 +281,21 @@ const StatCard = ({
   value,
   color,
   icon,
+  subtitle,
 }: {
   label: string;
   value: number | string;
   color?: string;
   icon?: React.ReactNode;
+  subtitle?: React.ReactNode;
 }) => (
   <Card className="border-border/60">
     <CardContent className="py-3 px-4">
       <div className="flex items-center justify-between gap-2">
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">{label}</p>
           <p className={cn("text-2xl font-heading font-bold mt-0.5", color)}>{value}</p>
+          {subtitle && <div className="mt-1">{subtitle}</div>}
         </div>
         {icon && (
           <div className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground flex-shrink-0">
@@ -1135,6 +1138,15 @@ const WheelchairServicesPage = () => {
             value={loading ? "—" : servicedFlightsCount}
             color={servicedFlightsCount > 0 ? "text-sky-700" : undefined}
             icon={<Activity className="w-4 h-4" />}
+            subtitle={(() => {
+              const names = getOnShiftUserNames();
+              if (names.length === 0) return null;
+              return (
+                <p className="text-[10px] text-muted-foreground leading-tight truncate">
+                  <span className="font-medium text-foreground">On shift:</span> {names.join(", ")}
+                </p>
+              );
+            })()}
           />
         </div>
 
