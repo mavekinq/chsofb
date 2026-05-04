@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Clock, Plane, Users, MapPin, AlertTriangle, Plus, Trash2,
-  Search, RefreshCw, Accessibility, Activity, X, ChevronDown, ChevronUp,
+  Search, RefreshCw, Accessibility, X, ChevronDown, ChevronUp,
   MessageSquare, Pencil, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -1134,15 +1134,10 @@ const WheelchairServicesPage = () => {
             icon={<AlertTriangle className="w-4 h-4" />}
           />
           <StatCard
-            label="Hizmetli Uçuş"
-            value={loading ? "—" : servicedFlightsCount}
-            color={servicedFlightsCount > 0 ? "text-sky-700" : undefined}
-            icon={<Activity className="w-4 h-4" />}
-            subtitle={
-              <p className="text-[10px] text-muted-foreground leading-tight">
-                <span className="font-medium text-foreground">Vardiyadaki OFB:</span> {getOnShiftOFBCount()}
-              </p>
-            }
+            label="Vardiyadaki OFB"
+            value={getOnShiftOFBCount()}
+            color="text-sky-700"
+            icon={<Users className="w-4 h-4" />}
           />
         </div>
 
