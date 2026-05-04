@@ -35,7 +35,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { fetchFlightPlanEntriesMerged, fetchFlightPlanEntriesMergedWithWindow, getFlightCodeMatchKeys, getIstanbulDateKey, normalizeFlightCode } from "@/lib/flight-plan";
 import { triggerServicePushNotification } from "@/lib/notifications";
-import { getOnShiftUserNames } from "@/lib/work-schedule";
+import { getOnShiftOFBCount } from "@/lib/work-schedule";
 import { triggerGoogleSheetsSync } from "@/lib/google-sheets-sync";
 import { buildDeparturesPayload, buildFlightLookup, buildInventorySummaryPayload, buildSpecialServicesPayload } from "@/lib/google-sheets-payload";
 import { buildServiceNotesWithAssignedStaff, extractAssignedStaffFromService, getVisibleServiceNotes, isAssignedStaffSchemaCacheError } from "@/lib/wheelchair-service-utils";
@@ -1138,15 +1138,11 @@ const WheelchairServicesPage = () => {
             value={loading ? "—" : servicedFlightsCount}
             color={servicedFlightsCount > 0 ? "text-sky-700" : undefined}
             icon={<Activity className="w-4 h-4" />}
-            subtitle={(() => {
-              const names = getOnShiftUserNames();
-              if (names.length === 0) return null;
-              return (
-                <p className="text-[10px] text-muted-foreground leading-tight truncate">
-                  <span className="font-medium text-foreground">On shift:</span> {names.join(", ")}
-                </p>
-              );
-            })()}
+            subtitle={
+              <p className="text-[10px] text-muted-foreground leading-tight">
+                <span className="font-medium text-foreground">Vardiyadaki OFB:</span> {getOnShiftOFBCount()}
+              </p>
+            }
           />
         </div>
 

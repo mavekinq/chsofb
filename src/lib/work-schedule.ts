@@ -409,3 +409,24 @@ export const getOnShiftUserNames = (): string[] => {
     })
     .map((employee) => employee.name);
 };
+
+export const getOnShiftOFBCount = (): number => {
+  const payload = getStoredSchedulePayload();
+  const now = new Date();
+  const minuteNow = now.getHours() * 60 + now.getMinutes();
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+  const todayIndex = payload.weekDates.indexOf(todayKey);
+  if (todayIndex === -1) return 0;
+  const previousDayKey = todayIndex > 0 ? payload.weekDates[todayIndex - 1] : null;
+
+  return payload.employees.filter((employee) => {
+    const todayShift = employee.shifts[todayKey] || "";
+    const previousShift = previousDayKey ? employee.shifts[previousDayKey] || "" : "";
+    const isActive = isShiftActiveNow(todayShift, minuteNow)
+      || (previousDayKey ? isOvernightFromPrevDay(previousShift, minuteNow) : false);
+    if (!isActive) return false;
+    const positionText = `${employee.group ?? ""} ${employee.team ?? ""} ${employee.rawTeam ?? ""}`.toLocaleLowerCase("tr");
+    return positionText.includes("ofb");
+  }).length;
+};
