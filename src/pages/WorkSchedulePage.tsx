@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,6 +74,7 @@ const getPreferredSelectedDate = (weekDates: string[], todayKey: string) => {
 
 const WorkSchedulePage = () => {
   const navigate = useNavigate();
+  const weekDatesScrollRef = useRef<HTMLDivElement | null>(null);
   const [now, setNow] = useState(new Date());
   const [query, setQuery] = useState("");
   const [payload, setPayload] = useState<SchedulePayload>(() => getStoredSchedulePayload());
@@ -214,16 +215,17 @@ const WorkSchedulePage = () => {
 
   const isNowMode = selectedDate === todayKey;
 
-  const orderedWeekDates = useMemo(() => {
-    const todayWeekIndex = payload.weekDates.indexOf(todayKey);
-    if (todayWeekIndex <= 0) {
-      return payload.weekDates;
-    }
+  useEffect(() => {
+    if (!weekDatesScrollRef.current) return;
+    if (!payload.weekDates.includes(todayKey)) return;
 
-    return [
-      ...payload.weekDates.slice(todayWeekIndex),
-      ...payload.weekDates.slice(0, todayWeekIndex),
-    ];
+    const frameId = window.requestAnimationFrame(() => {
+      const todayButton = weekDatesScrollRef.current?.querySelector<HTMLButtonElement>(`button[data-date="${todayKey}"]`);
+      if (!todayButton) return;
+      todayButton.scrollIntoView({ behavior: "auto", inline: "start", block: "nearest" });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
   }, [payload.weekDates, todayKey]);
 
   const todaySummary = useMemo(() => {
@@ -286,11 +288,12 @@ const WorkSchedulePage = () => {
 
         <div className="bg-card border border-border rounded-lg p-4 mb-4">
           <h2 className="font-heading text-lg mb-2">Haftalik Tarihler</h2>
-          <div className="overflow-x-auto pb-1">
+          <div ref={weekDatesScrollRef} className="overflow-x-auto pb-1">
             <div className="flex w-max min-w-full flex-nowrap gap-2">
-              {orderedWeekDates.map((d) => (
+              {payload.weekDates.map((d) => (
                 <button
                   key={d}
+                  data-date={d}
                   type="button"
                   onClick={() => setSelectedDate(d)}
                   className={`shrink-0 px-2.5 py-1 text-xs rounded-full border ${d === selectedDate ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
