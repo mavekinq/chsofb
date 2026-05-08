@@ -214,6 +214,18 @@ const WorkSchedulePage = () => {
 
   const isNowMode = selectedDate === todayKey;
 
+  const orderedWeekDates = useMemo(() => {
+    const todayWeekIndex = payload.weekDates.indexOf(todayKey);
+    if (todayWeekIndex <= 0) {
+      return payload.weekDates;
+    }
+
+    return [
+      ...payload.weekDates.slice(todayWeekIndex),
+      ...payload.weekDates.slice(0, todayWeekIndex),
+    ];
+  }, [payload.weekDates, todayKey]);
+
   const todaySummary = useMemo(() => {
     if (!payload.weekDates.includes(todayKey)) {
       return { scheduledShiftCount: 0 };
@@ -276,7 +288,7 @@ const WorkSchedulePage = () => {
           <h2 className="font-heading text-lg mb-2">Haftalik Tarihler</h2>
           <div className="overflow-x-auto pb-1">
             <div className="flex w-max min-w-full flex-nowrap gap-2">
-              {payload.weekDates.map((d) => (
+              {orderedWeekDates.map((d) => (
                 <button
                   key={d}
                   type="button"
