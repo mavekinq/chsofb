@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
-import { showRealtimeServiceAlert } from "@/lib/notifications";
+import { isServiceAlertsEnabled, isServiceToastEnabled, showRealtimeServiceAlert } from "@/lib/notifications";
 import { extractAssignedStaffFromService, getVisibleServiceNotes } from "@/lib/wheelchair-service-utils";
 
 type WheelchairServiceRow = Database["public"]["Tables"]["wheelchair_services"]["Row"];
@@ -18,6 +18,10 @@ const ServiceRealtimeListener = () => {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "wheelchair_services" },
         (payload) => {
+          if (!isServiceAlertsEnabled()) {
+            return;
+          }
+
           const service = payload.new as WheelchairServiceRow;
           if (!service?.id || recentServiceIdsRef.current.includes(service.id)) {
             return;
@@ -28,7 +32,7 @@ const ServiceRealtimeListener = () => {
           const assignedStaff = extractAssignedStaffFromService(service) || "Belirtilmedi";
           const visibleNotes = getVisibleServiceNotes(service.notes);
 
-          if (document.visibilityState === "visible") {
+          if (document.visibilityState === "visible" && isServiceToastEnabled()) {
             toast.success(`Yeni hizmet: ${service.flight_iata}`, {
               description: `${service.wheelchair_id} • ${service.passenger_type} • Atanan: ${assignedStaff}${visibleNotes ? ` • ${visibleNotes}` : ""}`,
             });

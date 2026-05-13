@@ -13,7 +13,7 @@ const NAV_ITEMS: MobileNavItem[] = [
   { path: "/", label: "Ana", icon: House, exact: true },
   { path: "/wheelchair-system", label: "Sandalye", icon: Accessibility },
   { path: "/wheelchair-services", label: "Hizmet", icon: Users },
-  { path: "/flights", label: "Ucus", icon: Plane },
+  { path: "/flights", label: "Uçuş", icon: Plane },
   { path: "/settings", label: "Ayarlar", icon: Settings },
 ];
 

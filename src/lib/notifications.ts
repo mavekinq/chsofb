@@ -39,8 +39,54 @@ type ServiceAlertPayload = {
 };
 
 export const SERVICE_ALERT_EVENT = "wheelchair-service-alert";
+const NOTIFICATION_PREFERENCES_STORAGE_KEY = "notificationPreferences";
+
+export type NotificationPreferences = {
+  serviceAlertsEnabled: boolean;
+  serviceToastEnabled: boolean;
+};
+
+const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+  serviceAlertsEnabled: true,
+  serviceToastEnabled: true,
+};
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+
+export const getNotificationPreferences = (): NotificationPreferences => {
+  if (typeof window === "undefined") {
+    return DEFAULT_NOTIFICATION_PREFERENCES;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(NOTIFICATION_PREFERENCES_STORAGE_KEY);
+    if (!raw) {
+      return DEFAULT_NOTIFICATION_PREFERENCES;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<NotificationPreferences>;
+    return {
+      serviceAlertsEnabled: parsed.serviceAlertsEnabled ?? DEFAULT_NOTIFICATION_PREFERENCES.serviceAlertsEnabled,
+      serviceToastEnabled: parsed.serviceToastEnabled ?? DEFAULT_NOTIFICATION_PREFERENCES.serviceToastEnabled,
+    };
+  } catch {
+    return DEFAULT_NOTIFICATION_PREFERENCES;
+  }
+};
+
+export const saveNotificationPreferences = (preferences: NotificationPreferences) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(NOTIFICATION_PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
+};
+
+export const isServiceAlertsEnabled = () => getNotificationPreferences().serviceAlertsEnabled;
+export const isServiceToastEnabled = () => {
+  const prefs = getNotificationPreferences();
+  return prefs.serviceAlertsEnabled && prefs.serviceToastEnabled;
+};
 
 const isSecurePushContext = () => {
   if (typeof window === "undefined") {
@@ -248,6 +294,10 @@ export const triggerTestPushNotification = async (createdBy: string) => {
 
 export const showRealtimeServiceAlert = async (service: ServiceAlertPayload) => {
   if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!isServiceAlertsEnabled()) {
     return;
   }
 

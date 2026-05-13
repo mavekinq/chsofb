@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { Accessibility, ArrowRight, Bell, Briefcase, CalendarDays, ExternalLink, LogOut, Megaphone, Newspaper, Phone, Plane, RefreshCw, Shield, Users } from "lucide-react";
+import { Accessibility, ArrowRight, Bell, Briefcase, CalendarDays, ExternalLink, LogOut, Megaphone, Newspaper, Phone, Plane, RefreshCw, Settings, Shield, Users } from "lucide-react";
 import SplashScreen from "@/components/SplashScreen";
 import { BRIEFINGS_UPDATED_EVENT, getBriefings, loadBriefings } from "@/lib/briefings";
 import { CELEBI_NEWS_SOURCE_URL, type CelebiNewsItem, fetchCelebiNews } from "@/lib/celebi-news";
@@ -340,6 +340,10 @@ const MainMenu = () => {
                 <span className="hidden sm:inline">Admin Menüsü</span>
               </Button>
             )}
+            <Button variant="outline" size="sm" onClick={() => navigate("/settings")} className="gap-1.5">
+              <Settings className="w-4 h-4" />
+              <span className="hidden sm:inline">Ayarlar</span>
+            </Button>
             <span className="text-sm text-muted-foreground hidden sm:inline">{currentUser}</span>
             <Button variant="ghost" size="sm" onClick={handleLogout} title="Cikis Yap">
               <LogOut className="w-4 h-4" />
