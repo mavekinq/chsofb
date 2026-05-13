@@ -102,25 +102,8 @@ const FlightsPage = () => {
     }
 
     if (isMobileDevice()) {
-      // Try FR24 app deeplink; cancel fallback if app opens (page goes hidden)
-      const deepLink = `fr24://search?query=${tailNumber}`;
-      const webFallback = `https://www.flightradar24.com/${tailNumber}`;
-
-      let timer: ReturnType<typeof setTimeout>;
-
-      const onHidden = () => {
-        clearTimeout(timer);
-        document.removeEventListener("visibilitychange", onHidden);
-      };
-      document.addEventListener("visibilitychange", onHidden);
-
-      window.location.href = deepLink;
-
-      timer = setTimeout(() => {
-        document.removeEventListener("visibilitychange", onHidden);
-        // App not installed; open web
-        window.open(webFallback, "_blank", "noopener,noreferrer");
-      }, 800);
+      // Only attempt FR24 app deeplink — no web fallback to avoid Safari opening
+      window.location.href = `fr24://search?query=${tailNumber}`;
     } else {
       window.open(`https://www.flightradar24.com/${tailNumber}`, "_blank", "noopener,noreferrer");
     }
