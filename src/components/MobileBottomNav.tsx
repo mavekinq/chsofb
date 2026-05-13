@@ -1,4 +1,4 @@
-import { Accessibility, House, Plane, Settings, Users } from "lucide-react";
+import { Accessibility, CalendarDays, House, Plane, Users } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +14,7 @@ const NAV_ITEMS: MobileNavItem[] = [
   { path: "/wheelchair-system", label: "Sandalye", icon: Accessibility },
   { path: "/wheelchair-services", label: "Hizmet", icon: Users },
   { path: "/flights", label: "Uçuş", icon: Plane },
-  { path: "/settings", label: "Ayarlar", icon: Settings },
+  { path: "/work-schedule", label: "Vardiya", icon: CalendarDays },
 ];
 
 const VISIBLE_PATHS = [
