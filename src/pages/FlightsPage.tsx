@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Plane, ArrowLeft, Clock, MapPin, AlertTriangle, Filter, ExternalLink, X } from "lucide-react";
+import { Search, Plane, ArrowLeft, Clock, MapPin, AlertTriangle, Filter, ExternalLink } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -35,7 +35,6 @@ const FlightsPage = () => {
   const [search, setSearch] = useState("");
   const [showSpecialOnly, setShowSpecialOnly] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [fr24ViewerUrl, setFr24ViewerUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const loadSnapshotDates = async () => {
@@ -102,32 +101,11 @@ const FlightsPage = () => {
       return;
     }
 
-    if (isMobileDevice()) {
-      setFr24ViewerUrl(`https://globe.adsbexchange.com/?reg=${tailNumber}&zoom=8`);
-    } else {
-      window.open(`https://www.flightradar24.com/${tailNumber}`, "_blank", "noopener,noreferrer");
-    }
+    window.open(`https://www.flightradar24.com/${tailNumber}`, "_blank", "noopener,noreferrer");
   };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* FR24 in-app viewer overlay */}
-      {fr24ViewerUrl && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col">
-          <div className="flex items-center justify-between px-4 py-2 bg-card border-b border-border">
-            <span className="text-sm font-medium text-foreground">Canlı Takip</span>
-            <Button variant="ghost" size="icon" onClick={() => setFr24ViewerUrl(null)}>
-              <X className="w-5 h-5" />
-            </Button>
-          </div>
-          <iframe
-            src={fr24ViewerUrl}
-            className="flex-1 w-full border-none"
-            title="FlightRadar24"
-            allow="geolocation"
-          />
-        </div>
-      )}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-30">
         <div className="container flex items-center justify-between h-14 px-4">
           <div className="flex items-center gap-3">
