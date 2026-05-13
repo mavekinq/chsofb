@@ -102,8 +102,13 @@ const FlightsPage = () => {
     }
 
     if (isMobileDevice()) {
-      // Universal Link — iOS routes to FR24 app (live map) if installed, Safari if not
-      window.open(`https://www.flightradar24.com/${tailNumber}`, "_blank", "noopener,noreferrer");
+      // Use anchor click to trigger iOS Universal Link → opens FR24 app only, no Safari
+      const a = document.createElement("a");
+      a.href = `https://www.flightradar24.com/${tailNumber}`;
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     } else {
       window.open(`https://www.flightradar24.com/${tailNumber}`, "_blank", "noopener,noreferrer");
     }
