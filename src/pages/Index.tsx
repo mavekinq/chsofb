@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { triggerGoogleSheetsSync } from "@/lib/google-sheets-sync";
 import { fetchFlightPlanEntries } from "@/lib/flight-plan";
 import { buildDeparturesPayload, buildFlightLookup, buildInventorySummaryPayload, buildSpecialServicesPayload } from "@/lib/google-sheets-payload";
-import SplashScreen from "@/components/SplashScreen";
 
 import WheelchairCard, { Wheelchair, WheelchairStatus } from "@/components/WheelchairCard";
 import ShiftDialog from "@/components/ShiftDialog";
@@ -34,7 +33,6 @@ const handleLogout = () => {
 
 const Index = () => {
   const navigate = useNavigate();
-  const [splash, setSplash] = useState(true);
   const [activeTab, setActiveTab] = useState("İç Hat");
   const [showShift, setShowShift] = useState(false);
   const [showLocation, setShowLocation] = useState(false);
@@ -59,11 +57,6 @@ const Index = () => {
       setCurrentUser(user);
     }
   }, [navigate]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setSplash(false), 2800);
-    return () => clearTimeout(timer);
-  }, []);
 
   const fetchWheelchairs = useCallback(async () => {
     const { data, error } = await supabase.from("wheelchairs").select("*");
@@ -190,8 +183,6 @@ const Index = () => {
     missing: wheelchairs.filter((w) => w.terminal === activeTab && w.status === "missing").length,
     maintenance: wheelchairs.filter((w) => w.terminal === activeTab && w.status === "maintenance").length,
   };
-
-  if (splash) return <SplashScreen isVisible={splash} />;
 
   return (
     <div className="min-h-screen bg-background">
