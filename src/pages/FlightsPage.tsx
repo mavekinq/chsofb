@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Plane, ArrowLeft, Clock, MapPin, AlertTriangle, Filter } from "lucide-react";
+import { Search, Plane, ArrowLeft, Clock, MapPin, AlertTriangle, Filter, ExternalLink } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -90,6 +90,36 @@ const FlightsPage = () => {
     return matchesSearch && matchesSpecial;
   });
 
+  const getTailNumberForRadar = (flight: FlightPlanEntry) =>
+    (flight.tailNumber || "").replace(/\s+/g, "").toUpperCase();
+
+  const isMobileDevice = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  const openFlightRadar = (flight: FlightPlanEntry) => {
+    const tailNumber = getTailNumberForRadar(flight);
+    if (!tailNumber) {
+      return;
+    }
+
+    if (isMobileDevice()) {
+      // Try FR24 app deeplink first; fall back to web if app not installed
+      const deepLink = `fr24://search?query=${tailNumber}`;
+      const webFallback = `https://www.flightradar24.com/${tailNumber}`;
+
+      const start = Date.now();
+      window.location.href = deepLink;
+
+      setTimeout(() => {
+        // If the page is still visible (app didn't open), open web fallback
+        if (Date.now() - start < 1500) {
+          window.open(webFallback, "_blank", "noopener,noreferrer");
+        }
+      }, 800);
+    } else {
+      window.open(`https://www.flightradar24.com/${tailNumber}`, "_blank", "noopener,noreferrer");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-30">
@@ -170,6 +200,7 @@ const FlightsPage = () => {
                       <TableHead className="font-heading">Gidiş</TableHead>
                       <TableHead className="font-heading">Park Poz.</TableHead>
                       <TableHead className="font-heading">Özel Durum</TableHead>
+                      <TableHead className="font-heading text-right">Radar</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -212,6 +243,18 @@ const FlightsPage = () => {
                               {f.specialNotes}
                             </span>
                           ) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            disabled={!getTailNumberForRadar(f)}
+                            onClick={() => openFlightRadar(f)}
+                          >
+                            FR24
+                            <ExternalLink className="w-3 h-3" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -259,6 +302,16 @@ const FlightsPage = () => {
                       <p className="font-medium">{f.departureTime || "—"} ({f.departureIATA || "—"})</p>
                     </div>
                   </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full gap-2 mt-1"
+                    disabled={!getTailNumberForRadar(f)}
+                    onClick={() => openFlightRadar(f)}
+                  >
+                    FlightRadar24'te Aç
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
               ))}
             </div>
