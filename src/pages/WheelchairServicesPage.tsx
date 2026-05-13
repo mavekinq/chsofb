@@ -53,6 +53,8 @@ interface Flight {
   flight_number: string;
   list_order: number;
   dep_day_offset: number;
+  arrivalCode?: string;
+  arrivalTime?: string;
   dep_iata: string;
   dep_terminal: string | null;
   dep_gate: string | null;
@@ -504,6 +506,15 @@ const WheelchairServicesPage = () => {
     return buildIstanbulTimestamp(minutes, flight.dep_day_offset);
   };
 
+  const getFlightArrivalTimestamp = (flight: Flight) => {
+    const rawTime = String(flight.arrivalTime || "").trim();
+    const minutes = parseDepartureMinutes(rawTime);
+    if (minutes === null) {
+      return 0;
+    }
+    return buildIstanbulTimestamp(minutes, 0);
+  };
+
   const isCounterClosed = (terminal: (typeof TERMINALS)[number], timestamp: number) => {
     if (timestamp <= 0) return false;
     const now = getIstanbulNowSeconds();
@@ -616,6 +627,8 @@ const WheelchairServicesPage = () => {
             flight_number: extractFlightNumber(flightCode),
             list_order: index,
             dep_day_offset: depDayOffset,
+            arrivalCode: entry.arrivalCode || undefined,
+            arrivalTime: entry.arrivalTime || undefined,
             dep_iata: "AYT",
             dep_terminal: getTerminalFromDestination(entry.departureIATA),
             dep_gate: entry.parkPosition || null,
@@ -810,6 +823,46 @@ const WheelchairServicesPage = () => {
       }).catch((pushError) => {
         sentPreFlightAlertsRef.current.delete(alertKey);
         console.error("Pre-flight service summary push failed:", pushError);
+      });
+
+      if (!containsWchWhcMarker(flight.specialNotes || "")) {
+        return;
+      }
+
+      const criticalTimestamp = getFlightArrivalTimestamp(flight) || depTime;
+      if (criticalTimestamp <= 0) {
+        return;
+      }
+
+      const criticalRemainingMinutes = (criticalTimestamp - nowSeconds) / 60;
+      const criticalAlertKey = `wch-whc-critical|${flight.flight_iata}|${criticalTimestamp}|20`;
+      if (sentPreFlightAlertsRef.current.has(criticalAlertKey)) {
+        return;
+      }
+      if (!(criticalRemainingMinutes <= 20 && criticalRemainingMinutes > 20 - PRE_FLIGHT_ALERT_WINDOW_MINUTES)) {
+        return;
+      }
+
+      sentPreFlightAlertsRef.current.add(criticalAlertKey);
+      void triggerServicePushNotification({
+        assigned_staff: "Sistem",
+        created_at: new Date().toISOString(),
+        created_by: currentUser,
+        flight_iata: flight.flight_iata,
+        notes: `WCH/WHC uçuşu kritik eşiğe girdi. Kalan süre: ${Math.max(0, Math.round(criticalRemainingMinutes))} dk`,
+        passenger_type: "BILDIRIM",
+        terminal,
+        wheelchair_id: `CRITICAL-${flight.flight_iata}`,
+        dep_gate: gate,
+        notification_kind: "flight-note",
+        custom_title: `WCH/WHC Kritik Uyarı: ${flight.flight_iata}`,
+        custom_body: `${flight.flight_iata} için kalan süre 20 dakikanın altına indi${gate !== "-" ? ` • Gate: ${gate}` : ""}`,
+        custom_url: "/wheelchair-services",
+        custom_tag: `wch-whc-critical-${flight.flight_iata}-${criticalTimestamp}`,
+        on_shift_users: getOnShiftUserNames(),
+      }).catch((pushError) => {
+        sentPreFlightAlertsRef.current.delete(criticalAlertKey);
+        console.error("WCH/WHC critical push failed:", pushError);
       });
     });
   }, [currentUser, flights, services]);
