@@ -12,8 +12,12 @@ type ServicePushPayload = {
   notes: string;
   created_at: string;
   dep_gate?: string;
-  notification_kind?: "service-created" | "service-updated" | "counter-close";
+  notification_kind?: "service-created" | "service-updated" | "counter-close" | "announcement" | "flight-gate-change" | "flight-note";
   on_shift_users?: string[];
+  custom_title?: string;
+  custom_body?: string;
+  custom_url?: string;
+  custom_tag?: string;
 };
 
 type PushDeliveryResult = {

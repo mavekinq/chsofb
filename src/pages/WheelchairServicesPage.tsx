@@ -35,7 +35,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { fetchFlightPlanEntriesMerged, fetchFlightPlanEntriesMergedWithWindow, getFlightCodeMatchKeys, getIstanbulDateKey, normalizeFlightCode } from "@/lib/flight-plan";
 import { triggerServicePushNotification } from "@/lib/notifications";
-import { getOnShiftOFBCount } from "@/lib/work-schedule";
+import { getOnShiftOFBCount, getOnShiftUserNames } from "@/lib/work-schedule";
 import { triggerGoogleSheetsSync } from "@/lib/google-sheets-sync";
 import { buildDeparturesPayload, buildFlightLookup, buildInventorySummaryPayload, buildSpecialServicesPayload } from "@/lib/google-sheets-payload";
 import { buildServiceNotesWithAssignedStaff, extractAssignedStaffFromService, getVisibleServiceNotes, isAssignedStaffSchemaCacheError } from "@/lib/wheelchair-service-utils";
@@ -274,6 +274,11 @@ const removeCompletedTag = (notes: string) =>
     .replace(/\n{2,}/g, "\n")
     .trim();
 
+const containsWchWhcMarker = (value: string) => {
+  const normalized = value.toLocaleUpperCase("tr-TR");
+  return normalized.includes("WCH") || normalized.includes("WHC");
+};
+
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
 const StatCard = ({
@@ -365,6 +370,8 @@ const WheelchairServicesPage = () => {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; flightIata: string } | null>(null);
   const [expandedServices, setExpandedServices] = useState<Set<string>>(new Set());
   const sentPreFlightAlertsRef = useRef<Set<string>>(new Set());
+  const lastFlightGateSnapshotRef = useRef<Record<string, string>>({});
+  const hasInitialFlightGateSnapshotRef = useRef(false);
   const servicesRef = useRef<WheelchairService[]>([]);
   const currentUserRef = useRef("Personel");
   const autoCompletingExpiredServicesRef = useRef(false);
@@ -401,10 +408,35 @@ const WheelchairServicesPage = () => {
   }, [todayKey]);
 
   const saveFlightNote = async (flightIata: string, note: string) => {
-    setFlightNotes((prev) => ({ ...prev, [flightIata]: note }));
+    const cleanNote = note.trim();
+    setFlightNotes((prev) => ({ ...prev, [flightIata]: cleanNote }));
     await supabase
       .from("flight_notes")
-      .upsert({ flight_iata: flightIata, note_date: todayKey, note, created_by: currentUser }, { onConflict: "flight_iata,note_date" });
+      .upsert({ flight_iata: flightIata, note_date: todayKey, note: cleanNote, created_by: currentUser }, { onConflict: "flight_iata,note_date" });
+
+    if (cleanNote && containsWchWhcMarker(cleanNote)) {
+      const flight = flights.find((item) => item.flight_iata === flightIata);
+      const gate = flight ? getDisplayGate(flight) : "-";
+      void triggerServicePushNotification({
+        assigned_staff: currentUser,
+        created_at: new Date().toISOString(),
+        created_by: currentUser,
+        flight_iata: flightIata,
+        notes: cleanNote,
+        passenger_type: "BILDIRIM",
+        terminal: flight ? resolveFlightTerminal(flight) : activeTab,
+        wheelchair_id: `NOT-${flightIata}`,
+        dep_gate: gate,
+        notification_kind: "flight-note",
+        custom_title: `WCH/WHC Notu: ${flightIata}`,
+        custom_body: `${cleanNote}${gate !== "-" ? ` • Gate: ${gate}` : ""}`,
+        custom_url: "/wheelchair-services",
+        custom_tag: `flight-note-${flightIata}-${todayKey}`,
+        on_shift_users: getOnShiftUserNames(),
+      }).catch((pushError) => {
+        console.error("Flight note push failed:", pushError);
+      });
+    }
   };
 
   const clearFlightNote = async (flightIata: string) => {
@@ -596,6 +628,47 @@ const WheelchairServicesPage = () => {
 
       const passedFlights = mappedFlights.filter((flight) => flight.dep_time_ts > 0 && flight.dep_time_ts <= nowSeconds);
       const visibleFlights = mappedFlights.filter((flight) => flight.dep_time_ts <= 0 || flight.dep_time_ts > nowSeconds);
+
+      const nextGateSnapshot: Record<string, string> = {};
+      visibleFlights.forEach((flight) => {
+        const gate = normalizeGateValue(flight.dep_gate || flight.plannedPosition || flight.parkPosition || "") || "";
+        nextGateSnapshot[flight.flight_iata] = gate;
+      });
+
+      if (hasInitialFlightGateSnapshotRef.current) {
+        for (const flight of visibleFlights) {
+          const currentGate = nextGateSnapshot[flight.flight_iata] || "";
+          const previousGate = lastFlightGateSnapshotRef.current[flight.flight_iata] || "";
+
+          if (!currentGate || currentGate === previousGate) {
+            continue;
+          }
+
+          void triggerServicePushNotification({
+            assigned_staff: currentUser,
+            created_at: new Date().toISOString(),
+            created_by: currentUser,
+            flight_iata: flight.flight_iata,
+            notes: `Park pozisyonu değişti: ${previousGate} → ${currentGate}`,
+            passenger_type: "BILDIRIM",
+            terminal: resolveFlightTerminal(flight),
+            wheelchair_id: `PARK-${flight.flight_iata}`,
+            dep_gate: currentGate,
+            notification_kind: "flight-gate-change",
+            custom_title: `Park Pozisyonu Değişti: ${flight.flight_iata}`,
+            custom_body: `${previousGate} → ${currentGate} • ${flight.dep_iata} → ${flight.arr_iata}`,
+            custom_url: "/wheelchair-services",
+            custom_tag: `flight-gate-${flight.flight_iata}-${currentGate}`,
+            on_shift_users: getOnShiftUserNames(),
+          }).catch((pushError) => {
+            console.error("Flight gate change push failed:", pushError);
+          });
+        }
+      } else {
+        hasInitialFlightGateSnapshotRef.current = true;
+      }
+
+      lastFlightGateSnapshotRef.current = nextGateSnapshot;
 
       setFlights(visibleFlights);
       void autoCompleteExpiredServices(passedFlights);

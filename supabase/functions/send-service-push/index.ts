@@ -17,7 +17,7 @@ type ServicePushPayload = {
   notes: string;
   created_at: string;
   dep_gate?: string;
-  notification_kind?: "service-created" | "service-updated" | "counter-close" | "announcement";
+  notification_kind?: "service-created" | "service-updated" | "counter-close" | "announcement" | "flight-gate-change" | "flight-note";
   custom_title?: string;
   custom_body?: string;
   custom_url?: string;
@@ -41,14 +41,16 @@ type PushSubscriptionRow = {
 };
 
 const isAnnouncementPayload = (service: ServicePushPayload) => {
-  return service.notification_kind === "announcement"
-    || Boolean(service.custom_title?.trim())
-    || Boolean(service.custom_body?.trim());
+  return service.notification_kind === "announcement";
 };
 
 const buildNotificationBody = (service: ServicePushPayload) => {
+  if (service.custom_body?.trim()) {
+    return service.custom_body.trim();
+  }
+
   if (isAnnouncementPayload(service)) {
-    return service.custom_body?.trim() || service.notes?.trim() || "Yeni bir duyuru paylaşıldı.";
+    return service.notes?.trim() || "Yeni bir duyuru paylaşıldı.";
   }
 
   if (service.notification_kind === "counter-close" || service.passenger_type === "BILDIRIM") {
@@ -90,8 +92,12 @@ const buildNotificationBody = (service: ServicePushPayload) => {
 };
 
 const buildNotificationTitle = (service: ServicePushPayload) => {
+  if (service.custom_title?.trim()) {
+    return service.custom_title.trim();
+  }
+
   if (isAnnouncementPayload(service)) {
-    return service.custom_title?.trim() || "📢 Operasyon Duyurusu";
+    return "📢 Operasyon Duyurusu";
   }
   if (service.notification_kind === "counter-close" || service.passenger_type === "BILDIRIM") {
     return `🔔 Kontuar Kapandı: ${service.flight_iata}`;
