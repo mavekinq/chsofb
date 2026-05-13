@@ -103,7 +103,7 @@ const FlightsPage = () => {
     }
 
     if (isMobileDevice()) {
-      setFr24ViewerUrl(`https://www.flightradar24.com/${tailNumber}`);
+      setFr24ViewerUrl(`https://globe.adsbexchange.com/?reg=${tailNumber}&zoom=8`);
     } else {
       window.open(`https://www.flightradar24.com/${tailNumber}`, "_blank", "noopener,noreferrer");
     }
@@ -115,7 +115,7 @@ const FlightsPage = () => {
       {fr24ViewerUrl && (
         <div className="fixed inset-0 z-50 bg-black flex flex-col">
           <div className="flex items-center justify-between px-4 py-2 bg-card border-b border-border">
-            <span className="text-sm font-medium text-foreground">FlightRadar24</span>
+            <span className="text-sm font-medium text-foreground">Canlı Takip</span>
             <Button variant="ghost" size="icon" onClick={() => setFr24ViewerUrl(null)}>
               <X className="w-5 h-5" />
             </Button>
