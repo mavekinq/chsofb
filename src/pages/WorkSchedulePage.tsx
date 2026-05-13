@@ -288,7 +288,7 @@ const WorkSchedulePage = () => {
 
         <div className="bg-card border border-border rounded-lg p-4 mb-4">
           <h2 className="font-heading text-lg mb-2">Haftalik Tarihler</h2>
-          <div ref={weekDatesScrollRef} className="overflow-x-auto pb-1">
+          <div ref={weekDatesScrollRef} className="overflow-x-auto pb-1 hide-scrollbar">
             <div className="flex w-max min-w-full flex-nowrap gap-2">
               {payload.weekDates.map((d) => (
                 <button
