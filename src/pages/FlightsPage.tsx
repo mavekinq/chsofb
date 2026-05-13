@@ -101,7 +101,15 @@ const FlightsPage = () => {
       return;
     }
 
-    window.open(`https://www.flightradar24.com/${tailNumber}`, "_blank", "noopener,noreferrer");
+    const targetUrl = `https://www.flightradar24.com/${tailNumber}`;
+
+    if (isMobileDevice()) {
+      // In iOS/Android PWA, same-window navigation avoids leaving a blank tab behind.
+      window.location.assign(targetUrl);
+      return;
+    }
+
+    window.open(targetUrl, "_blank", "noopener,noreferrer");
   };
 
   return (
