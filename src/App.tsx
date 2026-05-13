@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import ServiceAlertOverlay from "@/components/ServiceAlertOverlay";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ServiceRealtimeListener from "@/components/ServiceRealtimeListener";
+import MobileBottomNav from "@/components/MobileBottomNav";
 import Login from "./pages/Login.tsx";
 import AdminControlPage from "./pages/AdminControlPage.tsx";
 import MainMenu from "./pages/MainMenu.tsx";
@@ -13,6 +14,7 @@ import FlightsPage from "./pages/FlightsPage.tsx";
 import WheelchairServicesPage from "./pages/WheelchairServicesPage.tsx";
 import WorkSchedulePage from "./pages/WorkSchedulePage.tsx";
 import DirectoryPage from "./pages/DirectoryPage.tsx";
+import SettingsPage from "./pages/SettingsPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -34,9 +36,11 @@ const App = () => (
           <Route path="/wheelchair-services" element={<WheelchairServicesPage />} />
           <Route path="/work-schedule" element={<WorkSchedulePage />} />
           <Route path="/directory" element={<DirectoryPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+        <MobileBottomNav />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
