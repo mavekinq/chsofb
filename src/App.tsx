@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import ServiceAlertOverlay from "@/components/ServiceAlertOverlay";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ServiceRealtimeListener from "@/components/ServiceRealtimeListener";
+import OfflineStatusBanner from "@/components/OfflineStatusBanner";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import Login from "./pages/Login.tsx";
 import AdminControlPage from "./pages/AdminControlPage.tsx";
@@ -24,6 +25,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+        <OfflineStatusBanner />
       <ServiceAlertOverlay />
       <ServiceRealtimeListener />
       <BrowserRouter>

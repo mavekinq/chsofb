@@ -11,6 +11,7 @@ import {
   getIstanbulDateKey,
   type FlightPlanEntry,
 } from "@/lib/flight-plan";
+import { readOfflineCache, saveOfflineCache } from "@/lib/offline-cache";
 import {
   Select,
   SelectContent,
@@ -36,12 +37,24 @@ const FlightsPage = () => {
   const [showSpecialOnly, setShowSpecialOnly] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const flightsCacheKey = (dateKey: string) => `flights-page:flights:${dateKey}`;
+  const datesCacheKey = "flights-page:available-dates";
+
   useEffect(() => {
     const loadSnapshotDates = async () => {
-      const snapshotDates = await fetchFlightPlanSnapshotDates();
       const today = getIstanbulDateKey();
-      const nextDates = snapshotDates.includes(today) ? snapshotDates : [today, ...snapshotDates];
-      setAvailableDates(Array.from(new Set(nextDates)));
+
+      try {
+        const snapshotDates = await fetchFlightPlanSnapshotDates();
+        const nextDates = snapshotDates.includes(today) ? snapshotDates : [today, ...snapshotDates];
+        const uniqueDates = Array.from(new Set(nextDates));
+        setAvailableDates(uniqueDates);
+        saveOfflineCache(datesCacheKey, uniqueDates);
+      } catch (error) {
+        console.error("Snapshot dates fetch failed:", error);
+        const cachedDates = readOfflineCache<string[]>(datesCacheKey) || [today];
+        setAvailableDates(cachedDates);
+      }
     };
 
     const fetchFlights = async (dateKey: string) => {
@@ -52,8 +65,13 @@ const FlightsPage = () => {
           ? await fetchFlightPlanEntriesMerged()
           : await fetchFlightPlanEntriesForDate(dateKey);
         setFlights(data);
+        saveOfflineCache(flightsCacheKey(dateKey), { flights: data, fetchedAt: new Date().toISOString() });
       } catch (e) {
         console.error("Flight data fetch failed:", e);
+        const cached = readOfflineCache<{ flights: FlightPlanEntry[]; fetchedAt?: string }>(flightsCacheKey(dateKey));
+        if (cached?.flights) {
+          setFlights(cached.flights);
+        }
       } finally {
         setLoading(false);
       }

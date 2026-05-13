@@ -35,6 +35,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { fetchFlightPlanEntriesMerged, fetchFlightPlanEntriesMergedWithWindow, getFlightCodeMatchKeys, getIstanbulDateKey, normalizeFlightCode } from "@/lib/flight-plan";
 import { triggerServicePushNotification } from "@/lib/notifications";
+import { readOfflineCache, saveOfflineCache } from "@/lib/offline-cache";
 import { getOnShiftOFBCount, getOnShiftUserNames } from "@/lib/work-schedule";
 import { triggerGoogleSheetsSync } from "@/lib/google-sheets-sync";
 import { buildDeparturesPayload, buildFlightLookup, buildInventorySummaryPayload, buildSpecialServicesPayload } from "@/lib/google-sheets-payload";
@@ -121,6 +122,12 @@ const DOMESTIC_AIRPORT_CODES = new Set([
   "MQM", "MSR", "MZH", "NAV", "NOP", "OGU", "ONQ", "RIZ", "SAW", "SFQ", "SIC", "SZF", "TEQ", "TJK", "TZX", "USQ",
   "VAN", "YEI", "YKO", "BXN",
 ]);
+
+const OFFLINE_CACHE_KEYS = {
+  flights: "wheelchair-services:flights",
+  services: "wheelchair-services:services",
+  wheelchairs: "wheelchair-services:wheelchairs",
+} as const;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -671,11 +678,17 @@ const WheelchairServicesPage = () => {
       lastFlightGateSnapshotRef.current = nextGateSnapshot;
 
       setFlights(visibleFlights);
+      saveOfflineCache(OFFLINE_CACHE_KEYS.flights, { flights: visibleFlights, savedAt: new Date().toISOString() });
       void autoCompleteExpiredServices(passedFlights);
       setLastUpdated(new Date());
     } catch (error) {
       console.error("Flights fetch failed:", error);
-      toast.error("Uçuş verileri alınamadı");
+      const cachedFlights = readOfflineCache<{ flights: Flight[] }>(OFFLINE_CACHE_KEYS.flights);
+      if (cachedFlights?.flights) {
+        setFlights(cachedFlights.flights);
+      } else if (navigator.onLine) {
+        toast.error("Uçuş verileri alınamadı");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -683,18 +696,54 @@ const WheelchairServicesPage = () => {
   };
 
   const fetchServices = async () => {
-    const { data } = await supabase
-      .from("wheelchair_services")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (data) setServices(data as WheelchairService[]);
+    try {
+      const { data, error } = await supabase
+        .from("wheelchair_services")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        const nextServices = data as WheelchairService[];
+        setServices(nextServices);
+        saveOfflineCache(OFFLINE_CACHE_KEYS.services, { services: nextServices, savedAt: new Date().toISOString() });
+      }
+    } catch (error) {
+      const cachedServices = readOfflineCache<{ services: WheelchairService[] }>(OFFLINE_CACHE_KEYS.services);
+      if (cachedServices?.services) {
+        setServices(cachedServices.services);
+      } else if (navigator.onLine) {
+        console.error("Services fetch failed:", error);
+      }
+    }
   };
 
   const fetchWheelchairs = async () => {
-    const { data } = await supabase
-      .from("wheelchairs")
-      .select("id, wheelchair_id, status, terminal");
-    if (data) setWheelchairs(data as WheelchairInventory[]);
+    try {
+      const { data, error } = await supabase
+        .from("wheelchairs")
+        .select("id, wheelchair_id, status, terminal");
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        const nextWheelchairs = data as WheelchairInventory[];
+        setWheelchairs(nextWheelchairs);
+        saveOfflineCache(OFFLINE_CACHE_KEYS.wheelchairs, { wheelchairs: nextWheelchairs, savedAt: new Date().toISOString() });
+      }
+    } catch (error) {
+      const cachedWheelchairs = readOfflineCache<{ wheelchairs: WheelchairInventory[] }>(OFFLINE_CACHE_KEYS.wheelchairs);
+      if (cachedWheelchairs?.wheelchairs) {
+        setWheelchairs(cachedWheelchairs.wheelchairs);
+      } else if (navigator.onLine) {
+        console.error("Wheelchairs fetch failed:", error);
+      }
+    }
   };
 
   // ── Pre-flight alerts ──

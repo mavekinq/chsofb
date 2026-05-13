@@ -8,6 +8,7 @@ import SplashScreen from "@/components/SplashScreen";
 import { BRIEFINGS_UPDATED_EVENT, getBriefings, loadBriefings } from "@/lib/briefings";
 import { CELEBI_NEWS_SOURCE_URL, type CelebiNewsItem, fetchCelebiNews } from "@/lib/celebi-news";
 import { fetchFlightPlanEntries } from "@/lib/flight-plan";
+import { readOfflineCache, saveOfflineCache } from "@/lib/offline-cache";
 import { ensurePushSubscription, getNotificationPermissionState, isNotificationSupported, requiresInstalledPwaForPush, syncPushSubscriptionIfEnabled } from "@/lib/notifications";
 import { getStoredSchedulePayload, loadSchedulePayload, type SchedulePayload, WORK_SCHEDULE_UPDATED_EVENT } from "@/lib/work-schedule";
 import { toast } from "sonner";
@@ -60,6 +61,9 @@ const isActiveFromPreviousDayOvernight = (shiftValue: string, minuteNow: number)
 
   return minuteNow < parsed.end;
 };
+
+const DASHBOARD_SUMMARY_CACHE_KEY = "main-menu:dashboard-summary";
+const MAIN_MENU_NEWS_CACHE_KEY = "main-menu:news-items";
 
 const MainMenu = () => {
   const navigate = useNavigate();
@@ -189,11 +193,13 @@ const MainMenu = () => {
         const items = await fetchCelebiNews();
         if (!cancelled) {
           setNewsItems(items);
+          saveOfflineCache(MAIN_MENU_NEWS_CACHE_KEY, items);
         }
       } catch (error) {
         if (!cancelled) {
-          setNewsItems([]);
-          setNewsError("Çelebi haberleri şu an yüklenemedi.");
+          const cachedItems = readOfflineCache<CelebiNewsItem[]>(MAIN_MENU_NEWS_CACHE_KEY) || [];
+          setNewsItems(cachedItems);
+          setNewsError(cachedItems.length > 0 ? "Çevrimdışı: kayıtlı haberler gösteriliyor." : "Çelebi haberleri şu an yüklenemedi.");
         }
       } finally {
         if (!cancelled) {
@@ -215,31 +221,45 @@ const MainMenu = () => {
     const loadDashboardSummary = async () => {
       setSummaryLoading(true);
 
-      const [servicesResult, wheelchairsResult, flightEntries] = await Promise.all([
-        supabase.from("wheelchair_services").select("id", { count: "exact", head: true }),
-        supabase.from("wheelchairs").select("id, status"),
-        fetchFlightPlanEntries(),
-      ]);
+      try {
+        const [servicesResult, wheelchairsResult, flightEntries] = await Promise.all([
+          supabase.from("wheelchair_services").select("id", { count: "exact", head: true }),
+          supabase.from("wheelchairs").select("id, status"),
+          fetchFlightPlanEntries(),
+        ]);
 
-      if (cancelled) {
-        return;
+        if (cancelled) {
+          return;
+        }
+
+        if (servicesResult.error || wheelchairsResult.error) {
+          throw new Error("Dashboard summary fetch failed");
+        }
+
+        const arrivalFlights = flightEntries.filter((entry) => entry.arrivalCode).length;
+        const departureFlights = flightEntries.filter((entry) => entry.departureCode).length;
+
+        const nextSummary = {
+          activeServices: servicesResult.count ?? 0,
+          missingWheelchairs: wheelchairsResult.data?.filter((wheelchair) => wheelchair.status === "missing").length ?? 0,
+          arrivalFlights,
+          departureFlights,
+        };
+
+        setDashboardSummary(nextSummary);
+        saveOfflineCache(DASHBOARD_SUMMARY_CACHE_KEY, nextSummary);
+      } catch (error) {
+        if (!cancelled) {
+          const cachedSummary = readOfflineCache<DashboardSummary>(DASHBOARD_SUMMARY_CACHE_KEY);
+          if (cachedSummary) {
+            setDashboardSummary(cachedSummary);
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setSummaryLoading(false);
+        }
       }
-
-      if (servicesResult.error || wheelchairsResult.error) {
-        setSummaryLoading(false);
-        return;
-      }
-
-      const arrivalFlights = flightEntries.filter((entry) => entry.arrivalCode).length;
-      const departureFlights = flightEntries.filter((entry) => entry.departureCode).length;
-
-      setDashboardSummary({
-        activeServices: servicesResult.count ?? 0,
-        missingWheelchairs: wheelchairsResult.data?.filter((wheelchair) => wheelchair.status === "missing").length ?? 0,
-        arrivalFlights,
-        departureFlights,
-      });
-      setSummaryLoading(false);
     };
 
     void loadDashboardSummary();
