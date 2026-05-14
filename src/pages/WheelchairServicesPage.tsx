@@ -655,36 +655,7 @@ const WheelchairServicesPage = () => {
         nextGateSnapshot[flight.flight_iata] = gate;
       });
 
-      if (hasInitialFlightGateSnapshotRef.current) {
-        for (const flight of visibleFlights) {
-          const currentGate = nextGateSnapshot[flight.flight_iata] || "";
-          const previousGate = lastFlightGateSnapshotRef.current[flight.flight_iata] || "";
-
-          if (!currentGate || currentGate === previousGate) {
-            continue;
-          }
-
-          void triggerServicePushNotification({
-            assigned_staff: currentUser,
-            created_at: new Date().toISOString(),
-            created_by: currentUser,
-            flight_iata: flight.flight_iata,
-            notes: `Park pozisyonu değişti: ${previousGate} → ${currentGate}`,
-            passenger_type: "BILDIRIM",
-            terminal: resolveFlightTerminal(flight),
-            wheelchair_id: `PARK-${flight.flight_iata}`,
-            dep_gate: currentGate,
-            notification_kind: "flight-gate-change",
-            custom_title: `Park Pozisyonu Değişti: ${flight.flight_iata}`,
-            custom_body: `${previousGate} → ${currentGate} • ${flight.dep_iata} → ${flight.arr_iata}`,
-            custom_url: "/wheelchair-services",
-            custom_tag: `flight-gate-${flight.flight_iata}-${currentGate}`,
-            on_shift_users: getOnShiftUserNames(),
-          }).catch((pushError) => {
-            console.error("Flight gate change push failed:", pushError);
-          });
-        }
-      } else {
+      if (!hasInitialFlightGateSnapshotRef.current) {
         hasInitialFlightGateSnapshotRef.current = true;
       }
 
