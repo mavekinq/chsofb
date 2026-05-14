@@ -1,4 +1,11 @@
 {
+  "redirects": [
+    {
+      "source": "/excel",
+      "destination": "https://docs.google.com/spreadsheets/d/171G8dMhMLTkTEOayurEhVB8KFXmiuvLymk9XvdBhfzA/edit",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",
