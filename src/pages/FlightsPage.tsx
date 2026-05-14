@@ -119,15 +119,13 @@ const FlightsPage = () => {
       return;
     }
 
-    const targetUrl = `https://www.flightradar24.com/${tailNumber}`;
-
     if (isMobileDevice()) {
-      // In iOS/Android PWA, same-window navigation avoids leaving a blank tab behind.
-      window.location.assign(targetUrl);
+      // Avoid invalid URL alerts from unsupported fr24:// scheme.
+      window.location.assign(`https://www.flightradar24.com/data/aircraft/${tailNumber}`);
       return;
     }
 
-    window.open(targetUrl, "_blank", "noopener,noreferrer");
+    window.open(`https://www.flightradar24.com/${tailNumber}`, "_blank", "noopener,noreferrer");
   };
 
   return (
