@@ -17,9 +17,10 @@ interface WheelchairCardProps {
   onStatusChange: (id: string, status: WheelchairStatus) => void;
   onLocationChange: (id: string) => void;
   onNoteChange: (id: string) => void;
+  onTransferChange: (id: string) => void;
 }
 
-const WheelchairCard = ({ wheelchair, onStatusChange, onLocationChange, onNoteChange }: WheelchairCardProps) => {
+const WheelchairCard = ({ wheelchair, onStatusChange, onLocationChange, onNoteChange, onTransferChange }: WheelchairCardProps) => {
   return (
     <div className="bg-card border border-border rounded-lg p-4 hover:border-primary/30 transition-colors">
       <div className="flex items-center gap-3 mb-3">
@@ -86,6 +87,14 @@ const WheelchairCard = ({ wheelchair, onStatusChange, onLocationChange, onNoteCh
             📝 Not
           </Button>
         </div>
+        <Button
+          size="default"
+          variant="outline"
+          className="h-10 text-xs font-medium w-full"
+          onClick={() => onTransferChange(wheelchair.id)}
+        >
+          🔄 Transfer
+        </Button>
       </div>
     </div>
   );

@@ -31,7 +31,7 @@ import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import { Wheelchair } from "@/components/WheelchairCard";
 
-const TERMINALS = ["İç Hat", "T1", "T2"];
+const TERMINALS = ["İç Hat", "T1", "T2", "Diğer"];
 
 interface WheelchairManageDialogProps {
   open: boolean;

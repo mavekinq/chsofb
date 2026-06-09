@@ -16,8 +16,9 @@ import LocationDialog from "@/components/LocationDialog";
 import NoteDialog from "../components/NoteDialog";
 import HistoryLog from "@/components/HistoryLog";
 import WheelchairManageDialog from "@/components/WheelchairManageDialog";
+import TransferDialog from "@/components/TransferDialog";
 
-const TERMINALS = ["İç Hat", "T1", "T2"];
+const TERMINALS = ["İç Hat", "T1", "T2", "Diğer"];
 
 // Helper function to get current user name
 const getCurrentUser = (): string => {
@@ -37,6 +38,7 @@ const Index = () => {
   const [showShift, setShowShift] = useState(false);
   const [showLocation, setShowLocation] = useState(false);
   const [showNote, setShowNote] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showManage, setShowManage] = useState(false);
   const [missingOnly, setMissingOnly] = useState(false);
@@ -141,6 +143,40 @@ const Index = () => {
     setSelectedNoteChairId(id);
     setNoteText(chair.note ?? "");
     setShowNote(true);
+  };
+
+  const handleTransferChange = (id: string) => {
+    setSelectedChairId(id);
+    setShowTransfer(true);
+  };
+
+  const handleTransferConfirm = async (targetTerminal: string) => {
+    if (!selectedChairId) return;
+
+    const chair = wheelchairs.find((w) => w.id === selectedChairId);
+    if (!chair) return;
+
+    const { error } = await supabase
+      .from("wheelchairs")
+      .update({ terminal: targetTerminal })
+      .eq("id", selectedChairId);
+
+    if (error) {
+      toast.error("Transfer yapılamadı");
+      return;
+    }
+
+    setWheelchairs((prev) => prev.map((w) => (w.id === selectedChairId ? { ...w, terminal: targetTerminal } : w)));
+
+    await supabase.from("action_logs").insert({
+      wheelchair_id: chair.wheelchair_id,
+      action: "Terminal Transferi",
+      details: `${chair.terminal} → ${targetTerminal}`,
+      performed_by: currentUser,
+    });
+
+    toast.success(`${chair.wheelchair_id} ${targetTerminal} terminaline taşındı`);
+    setSelectedChairId(null);
   };
 
   const handleNoteConfirm = async (note: string) => {
@@ -367,6 +403,7 @@ const Index = () => {
                           onStatusChange={handleStatusChange}
                           onLocationChange={handleLocationChange}
                           onNoteChange={handleNoteChange}
+                          onTransferChange={handleTransferChange}
                         />
                       ))}
                     </div>
@@ -380,6 +417,7 @@ const Index = () => {
 
       <ShiftDialog open={showShift} onOpenChange={setShowShift} wheelchairs={wheelchairs} />
       <LocationDialog open={showLocation} onOpenChange={setShowLocation} onConfirm={handleLocationConfirm} />
+      <TransferDialog open={showTransfer} onOpenChange={setShowTransfer} onConfirm={handleTransferConfirm} />
       <NoteDialog
         open={showNote}
         onOpenChange={setShowNote}
