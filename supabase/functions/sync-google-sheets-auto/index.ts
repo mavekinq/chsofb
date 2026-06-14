@@ -125,11 +125,11 @@ const fetchFlightPlanEntries = async () => {
       const cols = parseCSVLine(line);
       return {
         departureCode: cols[2] || "",
-        departureTime: cols[6] || "",
-        departureIATA: cols[8] || "",
-        parkPosition: cols[9] || "",
+        departureTime: cols[8] || "",
+        departureIATA: cols[10] || "",
+        parkPosition: cols[11] || "",
         tailNumber: cols[4] || "",
-        specialNotes: cols[11] || "",
+        specialNotes: cols[13] || "",
       } satisfies FlightPlanEntry;
     })
     .filter((entry) => entry.departureCode || entry.departureIATA);
