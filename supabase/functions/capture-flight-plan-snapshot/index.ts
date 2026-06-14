@@ -19,7 +19,7 @@ const corsHeaders = {
 };
 
 const SHEET_URL =
-  "https://docs.google.com/spreadsheets/d/1hL68V6_92gTZPwvJNRDHG3i3GO2f7A59HKZsARDYQOY/export?format=csv";
+  "https://docs.google.com/spreadsheets/d/1-UVsf1_jZ_n_CPGqieMMWgMpbVnzzchuvexrseNUSqg/export?format=csv";
 
 const parseCSVLine = (line: string): string[] => {
   const result: string[] = [];
