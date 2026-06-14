@@ -21,7 +21,7 @@ export interface FlightPlanMergeResult {
 }
 
 const SHEET_URL =
-  "https://docs.google.com/spreadsheets/d/1-UVsf1_jZ_n_CPGqieMMWgMpbVnzzchuvexrseNUSqg/export?format=csv";
+  "https://docs.google.com/spreadsheets/d/1hL68V6_92gTZPwvJNRDHG3i3GO2f7A59HKZsARDYQOY/export?format=csv";
 
 const FLIGHT_CODE_ALIASES: Record<string, string[]> = {
   PC: ["PGT"],
