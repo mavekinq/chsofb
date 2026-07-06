@@ -17,7 +17,28 @@ const formatDateLabel = (isoDate: string) => {
   return d.toLocaleDateString("tr-TR", { weekday: "short", day: "2-digit", month: "2-digit" });
 };
 
-const getMinuteOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes();
+const getIstanbulDateKey = (value = new Date()) => {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  return formatter.format(value);
+};
+
+const getIstanbulMinuteOfDay = (value = new Date()) => {
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Istanbul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  const [hour, minute] = formatter.format(value).split(":").map(Number);
+  return (hour || 0) * 60 + (minute || 0);
+};
 
 const parseShift = (value: string) => {
   const normalized = (value || "").trim().replace(/\s+/g, "");
@@ -80,10 +101,20 @@ const WorkSchedulePage = () => {
   const [payload, setPayload] = useState<SchedulePayload>(() => getStoredSchedulePayload());
   const [selectedDate, setSelectedDate] = useState(() => {
     const initialPayload = getStoredSchedulePayload();
-    const initialNow = new Date();
-    const initialTodayKey = `${initialNow.getFullYear()}-${String(initialNow.getMonth() + 1).padStart(2, "0")}-${String(initialNow.getDate()).padStart(2, "0")}`;
+    const initialTodayKey = getIstanbulDateKey();
     return getPreferredSelectedDate(initialPayload.weekDates, initialTodayKey);
   });
+
+  const refreshScheduleState = async () => {
+    const nextPayload = await loadSchedulePayload();
+    const nextTodayKey = getIstanbulDateKey();
+    setPayload(nextPayload);
+    setSelectedDate((current) => (
+      nextPayload.weekDates.includes(current)
+        ? current
+        : getPreferredSelectedDate(nextPayload.weekDates, nextTodayKey)
+    ));
+  };
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60000);
@@ -91,24 +122,30 @@ const WorkSchedulePage = () => {
   }, []);
 
   useEffect(() => {
-    void loadSchedulePayload().then((nextPayload) => {
-      const nextNow = new Date();
-      const nextTodayKey = `${nextNow.getFullYear()}-${String(nextNow.getMonth() + 1).padStart(2, "0")}-${String(nextNow.getDate()).padStart(2, "0")}`;
-      setPayload(nextPayload);
-      setSelectedDate((current) => (
-        nextPayload.weekDates.includes(current)
-          ? current
-          : getPreferredSelectedDate(nextPayload.weekDates, nextTodayKey)
-      ));
-    });
+    void refreshScheduleState();
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => {
+      void refreshScheduleState();
+    };
+
+    const intervalId = window.setInterval(refresh, 120000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, []);
 
   useEffect(() => {
     const handleScheduleUpdated = (event: Event) => {
       const customEvent = event as CustomEvent<SchedulePayload>;
       const nextPayload = customEvent.detail || getStoredSchedulePayload();
-      const nextToday = new Date();
-      const nextTodayKey = `${nextToday.getFullYear()}-${String(nextToday.getMonth() + 1).padStart(2, "0")}-${String(nextToday.getDate()).padStart(2, "0")}`;
+      const nextTodayKey = getIstanbulDateKey();
       setPayload(nextPayload);
       setSelectedDate((current) => (
         nextPayload.weekDates.includes(current)
@@ -132,9 +169,9 @@ const WorkSchedulePage = () => {
     };
   }, []);
 
-  const nowLabel = now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
-  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const minuteNow = getMinuteOfDay(now);
+  const nowLabel = now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Istanbul" });
+  const todayKey = getIstanbulDateKey(now);
+  const minuteNow = getIstanbulMinuteOfDay(now);
 
   const todayIndex = payload.weekDates.indexOf(todayKey);
   const previousDayKey = (() => {

@@ -364,6 +364,29 @@ export const parseScheduleWorkbook = async (file: File) => {
 
 const SHIFT_PATTERN = /^(\d{2})(\d{2})-(\d{2})(\d{2})$/;
 
+const getIstanbulDateKey = (value = new Date()) => {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  return formatter.format(value);
+};
+
+const getIstanbulMinuteOfDay = (value = new Date()) => {
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Istanbul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  const [hour, minute] = formatter.format(value).split(":").map(Number);
+  return (hour || 0) * 60 + (minute || 0);
+};
+
 const parseShiftMinutes = (value: string) => {
   const normalized = (value || "").trim().replace(/\s+/g, "");
   const match = normalized.match(SHIFT_PATTERN);
@@ -392,9 +415,8 @@ const isOvernightFromPrevDay = (shiftValue: string, minuteNow: number) => {
  */
 export const getOnShiftUserNames = (): string[] => {
   const payload = getStoredSchedulePayload();
-  const now = new Date();
-  const minuteNow = now.getHours() * 60 + now.getMinutes();
-  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const minuteNow = getIstanbulMinuteOfDay();
+  const todayKey = getIstanbulDateKey();
 
   const todayIndex = payload.weekDates.indexOf(todayKey);
   if (todayIndex === -1) return [];
@@ -412,9 +434,8 @@ export const getOnShiftUserNames = (): string[] => {
 
 export const getOnShiftOFBCount = (): number => {
   const payload = getStoredSchedulePayload();
-  const now = new Date();
-  const minuteNow = now.getHours() * 60 + now.getMinutes();
-  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const minuteNow = getIstanbulMinuteOfDay();
+  const todayKey = getIstanbulDateKey();
 
   const todayIndex = payload.weekDates.indexOf(todayKey);
   if (todayIndex === -1) return 0;
