@@ -37,6 +37,46 @@ const FlightsPage = () => {
   const [showSpecialOnly, setShowSpecialOnly] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const getFlightKey = (entry: FlightPlanEntry) => {
+    return [
+      entry.arrivalCode,
+      entry.departureCode,
+      entry.tailNumber,
+      entry.arrivalTime,
+      entry.departureTime,
+      entry.parkPosition,
+    ].join("|");
+  };
+
+  const areEntriesEqual = (a: FlightPlanEntry, b: FlightPlanEntry) => {
+    return (
+      a.arrivalCode === b.arrivalCode &&
+      a.departureCode === b.departureCode &&
+      a.aircraftType === b.aircraftType &&
+      a.tailNumber === b.tailNumber &&
+      a.arrivalTime === b.arrivalTime &&
+      a.departureTime === b.departureTime &&
+      a.arrivalIATA === b.arrivalIATA &&
+      a.departureIATA === b.departureIATA &&
+      a.parkPosition === b.parkPosition &&
+      a.specialNotes === b.specialNotes
+    );
+  };
+
+  const reconcileFlights = (prev: FlightPlanEntry[], next: FlightPlanEntry[]) => {
+    const prevByKey = new Map(prev.map((entry) => [getFlightKey(entry), entry]));
+    const reconciled = next.map((entry) => {
+      const existing = prevByKey.get(getFlightKey(entry));
+      return existing && areEntriesEqual(existing, entry) ? existing : entry;
+    });
+
+    const unchanged =
+      prev.length === reconciled.length &&
+      prev.every((entry, index) => entry === reconciled[index]);
+
+    return unchanged ? prev : reconciled;
+  };
+
   const flightsCacheKey = (dateKey: string) => `flights-page:flights:${dateKey}`;
   const datesCacheKey = "flights-page:available-dates";
 
@@ -57,23 +97,27 @@ const FlightsPage = () => {
       }
     };
 
-    const fetchFlights = async (dateKey: string) => {
-      setLoading(true);
+    const fetchFlights = async (dateKey: string, silent = false) => {
+      if (!silent) {
+        setLoading(true);
+      }
 
       try {
         const data = dateKey === getIstanbulDateKey()
           ? await fetchFlightPlanEntriesMerged()
           : await fetchFlightPlanEntriesForDate(dateKey);
-        setFlights(data);
+        setFlights((prev) => reconcileFlights(prev, data));
         saveOfflineCache(flightsCacheKey(dateKey), { flights: data, fetchedAt: new Date().toISOString() });
       } catch (e) {
         console.error("Flight data fetch failed:", e);
         const cached = readOfflineCache<{ flights: FlightPlanEntry[]; fetchedAt?: string }>(flightsCacheKey(dateKey));
         if (cached?.flights) {
-          setFlights(cached.flights);
+          setFlights((prev) => reconcileFlights(prev, cached.flights));
         }
       } finally {
-        setLoading(false);
+        if (!silent) {
+          setLoading(false);
+        }
       }
     };
 
@@ -82,7 +126,7 @@ const FlightsPage = () => {
 
     const interval = window.setInterval(() => {
       void loadSnapshotDates();
-      void fetchFlights(selectedDate);
+      void fetchFlights(selectedDate, true);
     }, 60000);
 
     return () => window.clearInterval(interval);
@@ -212,8 +256,8 @@ const FlightsPage = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.map((f, i) => (
-                      <TableRow key={i} className="hover:bg-accent/30 transition-colors">
+                    {filtered.map((f) => (
+                      <TableRow key={getFlightKey(f)} className="hover:bg-accent/30 transition-colors">
                         <TableCell className="font-medium">{f.arrivalCode || "—"}</TableCell>
                         <TableCell className="font-medium">{f.departureCode || "—"}</TableCell>
                         <TableCell>{f.aircraftType || "—"}</TableCell>
@@ -273,8 +317,8 @@ const FlightsPage = () => {
 
             {/* Mobile cards */}
             <div className="md:hidden space-y-3">
-              {filtered.map((f, i) => (
-                <div key={i} className="bg-card border border-border rounded-lg p-4 space-y-2">
+              {filtered.map((f) => (
+                <div key={getFlightKey(f)} className="bg-card border border-border rounded-lg p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Plane className="w-4 h-4 text-primary" />
