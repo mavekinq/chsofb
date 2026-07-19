@@ -166,12 +166,12 @@ export const fetchFlightPlanEntries = async () => {
         departureCode: cols[2] || "",
         aircraftType: cols[3] || "",
         tailNumber: cols[4] || "",
-        arrivalTime: cols[5] || "",
-        departureTime: cols[6] || "",
-        arrivalIATA: cols[7] || "",
-        departureIATA: cols[8] || "",
-        parkPosition: cols[9] || "",
-        specialNotes: cols[11] || "",
+        arrivalTime: cols[7] || "",
+        departureTime: cols[8] || "",
+        arrivalIATA: cols[9] || "",
+        departureIATA: cols[10] || "",
+        parkPosition: cols[11] || "",
+        specialNotes: cols[13] || "",
       };
     })
     .filter((entry, index, array) => {
