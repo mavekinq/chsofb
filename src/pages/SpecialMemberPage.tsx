@@ -50,10 +50,6 @@ const getFlightKey = (flight: FlightPlanEntry) => [
   flight.tailNumber,
 ].join("|");
 
-const sortByDepartureTime = (left: FlightPlanEntry, right: FlightPlanEntry) => {
-  return (left.departureTime || "99:99").localeCompare(right.departureTime || "99:99", "tr");
-};
-
 const formatStatusTimestamp = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -141,8 +137,7 @@ const SpecialMemberPage = () => {
         }
 
         const departureFlights = entries
-          .filter((entry) => Boolean(entry.departureCode))
-          .sort(sortByDepartureTime);
+          .filter((entry) => Boolean(entry.departureCode));
 
         setFlights(departureFlights);
         setStatusByFlight(mapStatusRows((statusesResponse.data || []) as ChefDailyStatusRow[]));
