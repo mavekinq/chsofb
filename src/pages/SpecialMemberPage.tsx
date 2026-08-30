@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Clock3, MapPin, PlaneTakeoff, Search, Star } from "lucide-react";
+import { ArrowLeft, Clock3, Filter, MapPin, PlaneTakeoff, Search, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -120,6 +120,7 @@ const SpecialMemberPage = () => {
   const [statusByFlight, setStatusByFlight] = useState<Record<string, FlightStatusMeta>>({});
   const [savingFlightKey, setSavingFlightKey] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [showGateClose, setShowGateClose] = useState(false);
 
   useEffect(() => {
     const loadSnapshotDates = async () => {
@@ -137,15 +138,20 @@ const SpecialMemberPage = () => {
 
   const filteredFlights = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("tr");
-    if (!query) {
-      return flights;
-    }
-
     return flights.filter((flight) => {
+      const status = statusByFlight[getFlightKey(flight)];
+      if (!showGateClose && status?.stage === "gate-close") {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
       return [flight.tailNumber, flight.departureCode, flight.parkPosition]
         .some((value) => (value || "").toLocaleLowerCase("tr").includes(query));
     });
-  }, [flights, search]);
+  }, [flights, search, showGateClose, statusByFlight]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -348,14 +354,25 @@ const SpecialMemberPage = () => {
               </div>
             </div>
 
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Uçuş kodu, kuyruk no veya gate ara..."
-                className="pl-9 bg-secondary border-border"
-              />
+            <div className="flex flex-col gap-2 md:flex-row">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Uçuş kodu, kuyruk no veya gate ara..."
+                  className="pl-9 bg-secondary border-border"
+                />
+              </div>
+              <Button
+                type="button"
+                variant={showGateClose ? "default" : "outline"}
+                className="md:w-auto"
+                onClick={() => setShowGateClose((prev) => !prev)}
+              >
+                <Filter className="h-4 w-4 mr-2" />
+                {showGateClose ? "Gate Close Gizle" : "Gate Close Göster"}
+              </Button>
             </div>
 
             {loading ? (
