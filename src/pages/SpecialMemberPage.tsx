@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Clock3, MapPin, PlaneTakeoff, ShieldCheck, Star } from "lucide-react";
+import { ArrowLeft, Clock3, MapPin, PlaneTakeoff, Search, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { fetchFlightPlanEntriesMerged, getIstanbulDateKey, type FlightPlanEntry } from "@/lib/flight-plan";
 import { supabase } from "@/integrations/supabase/client";
@@ -84,7 +85,20 @@ const SpecialMemberPage = () => {
   const [loading, setLoading] = useState(true);
   const [statusByFlight, setStatusByFlight] = useState<Record<string, FlightStatusMeta>>({});
   const [savingFlightKey, setSavingFlightKey] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const snapshotDate = useMemo(() => getIstanbulDateKey(), []);
+
+  const filteredFlights = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase("tr");
+    if (!query) {
+      return flights;
+    }
+
+    return flights.filter((flight) => {
+      return [flight.tailNumber, flight.departureCode, flight.parkPosition]
+        .some((value) => (value || "").toLocaleLowerCase("tr").includes(query));
+    });
+  }, [flights, search]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -275,7 +289,6 @@ const SpecialMemberPage = () => {
               <Star className="w-5 h-5 text-amber-400" />
               Chef-Daily
             </CardTitle>
-            <CardDescription>Sadece size acik departure ucus listesi ve operasyon asama butonlari.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-[1fr_auto]">
@@ -286,34 +299,31 @@ const SpecialMemberPage = () => {
 
               <div className="rounded-xl border border-border bg-secondary/30 p-4 md:min-w-52">
                 <p className="text-sm text-muted-foreground">Departure uçuş</p>
-                <p className="mt-1 font-heading text-2xl">{flights.length}</p>
+                <p className="mt-1 font-heading text-2xl">{filteredFlights.length}</p>
               </div>
             </div>
 
-            <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4">
-              <div className="flex items-start gap-3">
-                <ShieldCheck className="mt-0.5 h-5 w-5 text-emerald-400" />
-                <div>
-                  <p className="font-medium">Yetki dogrulandi</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Bu alan security number eslesmesi ile korunuyor. Liste sadece departure ucaklarini gosterir ve kartlarda
-                    hazirlik, boarding, gate close durumlari isaretlenebilir.
-                  </p>
-                </div>
-              </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Uçuş kodu, kuyruk no veya gate ara..."
+                className="pl-9 bg-secondary border-border"
+              />
             </div>
 
             {loading ? (
               <div className="rounded-xl border border-border bg-card/70 p-8 text-center text-muted-foreground">
                 Departure uçuşları yükleniyor...
               </div>
-            ) : flights.length === 0 ? (
+            ) : filteredFlights.length === 0 ? (
               <div className="rounded-xl border border-border bg-card/70 p-8 text-center text-muted-foreground">
-                Listelenecek departure uçuşu bulunamadı.
+                {search.trim() ? "Aramana uygun departure uçuşu bulunamadı." : "Listelenecek departure uçuşu bulunamadı."}
               </div>
             ) : (
               <div className="grid gap-3 lg:grid-cols-2">
-                {flights.map((flight) => {
+                {filteredFlights.map((flight) => {
                   const flightKey = getFlightKey(flight);
                   const flightStatus = statusByFlight[flightKey];
                   const activeStage = flightStatus?.stage;
