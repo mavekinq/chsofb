@@ -17,6 +17,7 @@ import WorkSchedulePage from "./pages/WorkSchedulePage.tsx";
 import DirectoryPage from "./pages/DirectoryPage.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
 import ExcelRedirect from "./pages/ExcelRedirect.tsx";
+import SpecialMemberPage from "./pages/SpecialMemberPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -41,6 +42,7 @@ const App = () => (
           <Route path="/directory" element={<DirectoryPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/excel" element={<ExcelRedirect />} />
+          <Route path="/special-member" element={<SpecialMemberPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
