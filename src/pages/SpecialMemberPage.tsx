@@ -15,6 +15,7 @@ import {
   type FlightPlanEntry,
 } from "@/lib/flight-plan";
 import { supabase } from "@/integrations/supabase/client";
+import { hasSpecialMemberAccess } from "@/lib/special-member";
 import { toast } from "sonner";
 
 type FlightStage = "hazirlik" | "boarding" | "gate-close";
@@ -112,6 +113,8 @@ const mapStatusRows = (rows: ChefDailyStatusRow[]) => {
 const SpecialMemberPage = () => {
   const navigate = useNavigate();
   const currentUser = localStorage.getItem("userName") || "";
+  const securityNumber = localStorage.getItem("securityNumber");
+  const hasAccess = useMemo(() => hasSpecialMemberAccess(securityNumber), [securityNumber]);
   const todayDateKey = useMemo(() => getIstanbulDateKey(), []);
   const [availableDates, setAvailableDates] = useState<string[]>([todayDateKey]);
   const [selectedDate, setSelectedDate] = useState(todayDateKey);
@@ -156,11 +159,16 @@ const SpecialMemberPage = () => {
   useEffect(() => {
     if (!currentUser) {
       navigate("/login");
+      return;
     }
-  }, [currentUser, navigate]);
+
+    if (!hasAccess) {
+      navigate("/");
+    }
+  }, [currentUser, hasAccess, navigate]);
 
   useEffect(() => {
-    if (!currentUser) {
+    if (!currentUser || !hasAccess) {
       return;
     }
 
@@ -259,7 +267,7 @@ const SpecialMemberPage = () => {
       window.clearInterval(interval);
       void supabase.removeChannel(channel);
     };
-  }, [currentUser, selectedDate, todayDateKey]);
+  }, [currentUser, hasAccess, selectedDate, todayDateKey]);
 
   const handleStageChange = async (flight: FlightPlanEntry, stage: FlightStage) => {
     const flightKey = getFlightKey(flight);
@@ -307,7 +315,7 @@ const SpecialMemberPage = () => {
     }
   };
 
-  if (!currentUser) {
+  if (!currentUser || !hasAccess) {
     return null;
   }
 

@@ -11,6 +11,7 @@ import { fetchFlightPlanEntries } from "@/lib/flight-plan";
 import { readOfflineCache, saveOfflineCache } from "@/lib/offline-cache";
 import { ensurePushSubscription, getNotificationPermissionState, isNotificationSupported, requiresInstalledPwaForPush, syncPushSubscriptionIfEnabled } from "@/lib/notifications";
 import { getStoredSchedulePayload, loadSchedulePayload, type SchedulePayload, WORK_SCHEDULE_UPDATED_EVENT } from "@/lib/work-schedule";
+import { hasSpecialMemberAccess } from "@/lib/special-member";
 import { toast } from "sonner";
 
 type DashboardSummary = {
@@ -86,6 +87,7 @@ const MainMenu = () => {
   const [needsInstalledPwa, setNeedsInstalledPwa] = useState(() => requiresInstalledPwaForPush());
   const [now, setNow] = useState(new Date());
   const [schedulePayload, setSchedulePayload] = useState<SchedulePayload>(() => getStoredSchedulePayload());
+  const [hasSpecialAccess, setHasSpecialAccess] = useState(false);
 
   const nowLabel = useMemo(
     () => now.toLocaleString("tr-TR", {
@@ -124,12 +126,14 @@ const MainMenu = () => {
   useEffect(() => {
     const user = localStorage.getItem("userName");
     const role = localStorage.getItem("userRole");
+    const securityNumber = localStorage.getItem("securityNumber");
     if (!user) {
       navigate("/login");
       return;
     }
     setCurrentUser(user);
     setIsAdminUser(role === "admin");
+    setHasSpecialAccess(hasSpecialMemberAccess(securityNumber));
   }, [navigate]);
 
   useEffect(() => {
@@ -409,10 +413,12 @@ const MainMenu = () => {
                       <Phone className="h-4 w-4" />
                       Çelebi Rehber
                     </Button>
-                    <Button variant="outline" className="gap-2 border-amber-500/40 text-amber-300 hover:bg-amber-500/10" onClick={() => navigate("/chef-daily") }>
-                      <Star className="h-4 w-4" />
-                      Chef-Daily
-                    </Button>
+                    {hasSpecialAccess && (
+                      <Button variant="outline" className="gap-2 border-amber-500/40 text-amber-300 hover:bg-amber-500/10" onClick={() => navigate("/chef-daily") }>
+                        <Star className="h-4 w-4" />
+                        Chef-Daily
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -523,16 +529,18 @@ const MainMenu = () => {
             </CardContent>
           </Card>
 
-          <Card className="border-amber-500/30 bg-[linear-gradient(135deg,hsl(var(--card))_0%,hsl(42_85%_65%/0.12)_100%)] transition-colors hover:border-amber-400/60">
-            <CardContent className="flex items-center justify-between p-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-amber-300/80">Ozel</p>
-                <p className="mt-2 font-heading text-2xl">Chef-Daily</p>
-                <p className="mt-1 text-xs text-muted-foreground">Departure kontrol paneli</p>
-              </div>
-              <Button size="sm" variant="secondary" className="shrink-0" onClick={() => navigate("/chef-daily")}>Aç</Button>
-            </CardContent>
-          </Card>
+          {hasSpecialAccess && (
+            <Card className="border-amber-500/30 bg-[linear-gradient(135deg,hsl(var(--card))_0%,hsl(42_85%_65%/0.12)_100%)] transition-colors hover:border-amber-400/60">
+              <CardContent className="flex items-center justify-between p-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-amber-300/80">Ozel</p>
+                  <p className="mt-2 font-heading text-2xl">Chef-Daily</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Departure kontrol paneli</p>
+                </div>
+                <Button size="sm" variant="secondary" className="shrink-0" onClick={() => navigate("/chef-daily")}>Aç</Button>
+              </CardContent>
+            </Card>
+          )}
         </section>
 
         <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
