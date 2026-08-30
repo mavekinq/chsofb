@@ -145,6 +145,7 @@ export type Database = {
           id: string
           snapshot_date: string
           stage: string
+          stage_times: Json
           updated_at: string
           updated_by: string | null
         }
@@ -155,6 +156,7 @@ export type Database = {
           id?: string
           snapshot_date: string
           stage: string
+          stage_times?: Json
           updated_at?: string
           updated_by?: string | null
         }
@@ -165,6 +167,7 @@ export type Database = {
           id?: string
           snapshot_date?: string
           stage?: string
+          stage_times?: Json
           updated_at?: string
           updated_by?: string | null
         }

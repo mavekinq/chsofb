@@ -3,12 +3,18 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Clock3, MapPin, PlaneTakeoff, Search, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { fetchFlightPlanEntriesMerged, getIstanbulDateKey, type FlightPlanEntry } from "@/lib/flight-plan";
+import {
+  fetchFlightPlanEntriesForDate,
+  fetchFlightPlanEntriesMerged,
+  fetchFlightPlanSnapshotDates,
+  getIstanbulDateKey,
+  type FlightPlanEntry,
+} from "@/lib/flight-plan";
 import { supabase } from "@/integrations/supabase/client";
-import { hasSpecialMemberAccess } from "@/lib/special-member";
 import { toast } from "sonner";
 
 type FlightStage = "hazirlik" | "boarding" | "gate-close";
@@ -36,12 +42,14 @@ type ChefDailyStatusRow = {
   stage: FlightStage;
   updated_at: string;
   updated_by: string | null;
+  stage_times: Record<string, string> | null;
 };
 
 type FlightStatusMeta = {
   stage: FlightStage;
   updatedAt: string;
   updatedBy: string | null;
+  stageTimes: Partial<Record<FlightStage, string>>;
 };
 
 const getFlightKey = (flight: FlightPlanEntry) => [
@@ -64,25 +72,68 @@ const formatStatusTimestamp = (value: string) => {
   });
 };
 
+const formatSnapshotDate = (value: string) => {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  return date.toLocaleDateString("tr-TR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
+const parseStageTimes = (value: unknown): Partial<Record<FlightStage, string>> => {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const raw = value as Record<string, unknown>;
+  const result: Partial<Record<FlightStage, string>> = {};
+
+  FLIGHT_STAGES.forEach((stage) => {
+    const timestamp = raw[stage.key];
+    if (typeof timestamp === "string") {
+      result[stage.key] = timestamp;
+    }
+  });
+
+  return result;
+};
+
 const mapStatusRows = (rows: ChefDailyStatusRow[]) => {
   return Object.fromEntries(rows.map((row) => [row.flight_key, {
     stage: row.stage,
     updatedAt: row.updated_at,
     updatedBy: row.updated_by,
+    stageTimes: parseStageTimes(row.stage_times),
   }])) as Record<string, FlightStatusMeta>;
 };
 
 const SpecialMemberPage = () => {
   const navigate = useNavigate();
   const currentUser = localStorage.getItem("userName") || "";
-  const securityNumber = localStorage.getItem("securityNumber");
-  const hasAccess = useMemo(() => hasSpecialMemberAccess(securityNumber), [securityNumber]);
+  const todayDateKey = useMemo(() => getIstanbulDateKey(), []);
+  const [availableDates, setAvailableDates] = useState<string[]>([todayDateKey]);
+  const [selectedDate, setSelectedDate] = useState(todayDateKey);
   const [flights, setFlights] = useState<FlightPlanEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusByFlight, setStatusByFlight] = useState<Record<string, FlightStatusMeta>>({});
   const [savingFlightKey, setSavingFlightKey] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const snapshotDate = useMemo(() => getIstanbulDateKey(), []);
+
+  useEffect(() => {
+    const loadSnapshotDates = async () => {
+      try {
+        const snapshotDates = await fetchFlightPlanSnapshotDates();
+        const mergedDates = Array.from(new Set([todayDateKey, ...snapshotDates]));
+        setAvailableDates(mergedDates);
+      } catch {
+        setAvailableDates([todayDateKey]);
+      }
+    };
+
+    void loadSnapshotDates();
+  }, [todayDateKey]);
 
   const filteredFlights = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("tr");
@@ -99,16 +150,11 @@ const SpecialMemberPage = () => {
   useEffect(() => {
     if (!currentUser) {
       navigate("/login");
-      return;
     }
-
-    if (!hasAccess) {
-      navigate("/");
-    }
-  }, [currentUser, hasAccess, navigate]);
+  }, [currentUser, navigate]);
 
   useEffect(() => {
-    if (!hasAccess) {
+    if (!currentUser) {
       return;
     }
 
@@ -120,12 +166,16 @@ const SpecialMemberPage = () => {
       }
 
       try {
+        const flightsPromise = selectedDate === todayDateKey
+          ? fetchFlightPlanEntriesMerged()
+          : fetchFlightPlanEntriesForDate(selectedDate);
+
         const [entries, statusesResponse] = await Promise.all([
-          fetchFlightPlanEntriesMerged(),
+          flightsPromise,
           supabase
             .from("chef_daily_flight_statuses")
-            .select("flight_key, stage, updated_at, updated_by")
-            .eq("snapshot_date", snapshotDate),
+            .select("flight_key, stage, updated_at, updated_by, stage_times")
+            .eq("snapshot_date", selectedDate),
         ]);
 
         if (statusesResponse.error) {
@@ -203,43 +253,31 @@ const SpecialMemberPage = () => {
       window.clearInterval(interval);
       void supabase.removeChannel(channel);
     };
-  }, [hasAccess, snapshotDate]);
+  }, [currentUser, selectedDate, todayDateKey]);
 
   const handleStageChange = async (flight: FlightPlanEntry, stage: FlightStage) => {
     const flightKey = getFlightKey(flight);
-    const currentStage = statusByFlight[flightKey]?.stage;
+    const stageTimes = statusByFlight[flightKey]?.stageTimes || {};
     setSavingFlightKey(flightKey);
 
     try {
-      if (currentStage === stage) {
-        const { error } = await supabase
-          .from("chef_daily_flight_statuses")
-          .delete()
-          .eq("snapshot_date", snapshotDate)
-          .eq("flight_key", flightKey);
-
-        if (error) {
-          throw error;
-        }
-
-        setStatusByFlight((prev) => {
-          const next = { ...prev };
-          delete next[flightKey];
-          return next;
-        });
-        return;
-      }
+      const nowIso = new Date().toISOString();
+      const nextStageTimes = {
+        ...stageTimes,
+        [stage]: nowIso,
+      };
 
       const { error } = await supabase
         .from("chef_daily_flight_statuses")
         .upsert({
-          snapshot_date: snapshotDate,
+          snapshot_date: selectedDate,
           flight_key: flightKey,
           flight_code: flight.departureCode || "",
           departure_time: flight.departureTime || null,
           stage,
+          stage_times: nextStageTimes,
           updated_by: currentUser || null,
-          updated_at: new Date().toISOString(),
+          updated_at: nowIso,
         }, { onConflict: "snapshot_date,flight_key" });
 
       if (error) {
@@ -250,8 +288,9 @@ const SpecialMemberPage = () => {
         ...prev,
         [flightKey]: {
           stage,
-          updatedAt: new Date().toISOString(),
+          updatedAt: nowIso,
           updatedBy: currentUser || null,
+          stageTimes: nextStageTimes,
         },
       }));
     } catch (error) {
@@ -262,7 +301,7 @@ const SpecialMemberPage = () => {
     }
   };
 
-  if (!currentUser || !hasAccess) {
+  if (!currentUser) {
     return null;
   }
 
@@ -288,8 +327,19 @@ const SpecialMemberPage = () => {
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-[1fr_auto]">
               <div className="rounded-xl border border-border bg-secondary/30 p-4">
-                <p className="text-sm text-muted-foreground">Aktif kullanici</p>
-                <p className="mt-1 font-heading text-2xl">{currentUser}</p>
+                <p className="text-sm text-muted-foreground">Tarih</p>
+                <Select value={selectedDate} onValueChange={setSelectedDate}>
+                  <SelectTrigger className="mt-2 bg-background border-border">
+                    <SelectValue placeholder="Tarih seçin" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border-border">
+                    {availableDates.map((dateKey) => (
+                      <SelectItem key={dateKey} value={dateKey}>
+                        {formatSnapshotDate(dateKey)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="rounded-xl border border-border bg-secondary/30 p-4 md:min-w-52">
@@ -342,9 +392,20 @@ const SpecialMemberPage = () => {
                               {flight.departureIATA || "Bilinmiyor"} • {flight.aircraftType || "Tip yok"}
                             </p>
                             {flightStatus && (
-                              <p className="text-xs text-muted-foreground">
-                                Son guncelleyen: {flightStatus.updatedBy || "Bilinmiyor"} • {formatStatusTimestamp(flightStatus.updatedAt)}
-                              </p>
+                              <div className="space-y-1 text-xs text-muted-foreground">
+                                <p>
+                                  Son guncelleyen: {flightStatus.updatedBy || "Bilinmiyor"} • {formatStatusTimestamp(flightStatus.updatedAt)}
+                                </p>
+                                <p>
+                                  Hazırlık: {flightStatus.stageTimes.hazirlik ? formatStatusTimestamp(flightStatus.stageTimes.hazirlik) : "-"}
+                                </p>
+                                <p>
+                                  Boarding: {flightStatus.stageTimes.boarding ? formatStatusTimestamp(flightStatus.stageTimes.boarding) : "-"}
+                                </p>
+                                <p>
+                                  Gate Close: {flightStatus.stageTimes["gate-close"] ? formatStatusTimestamp(flightStatus.stageTimes["gate-close"]) : "-"}
+                                </p>
+                              </div>
                             )}
                           </div>
 
