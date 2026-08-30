@@ -25,6 +25,7 @@ const VISIBLE_PATHS = [
   "/work-schedule",
   "/directory",
   "/settings",
+  "/chef-daily",
 ];
 
 const isVisiblePath = (pathname: string) => {

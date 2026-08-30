@@ -137,6 +137,39 @@ export type Database = {
         }
         Relationships: []
       }
+      chef_daily_flight_statuses: {
+        Row: {
+          departure_time: string | null
+          flight_code: string
+          flight_key: string
+          id: string
+          snapshot_date: string
+          stage: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          departure_time?: string | null
+          flight_code: string
+          flight_key: string
+          id?: string
+          snapshot_date: string
+          stage: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          departure_time?: string | null
+          flight_code?: string
+          flight_key?: string
+          id?: string
+          snapshot_date?: string
+          stage?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       flight_plan_snapshots: {
         Row: {
           created_at: string

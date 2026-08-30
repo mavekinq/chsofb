@@ -42,7 +42,7 @@ const App = () => (
           <Route path="/directory" element={<DirectoryPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/excel" element={<ExcelRedirect />} />
-          <Route path="/special-member" element={<SpecialMemberPage />} />
+          <Route path="/chef-daily" element={<SpecialMemberPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

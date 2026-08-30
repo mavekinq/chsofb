@@ -414,9 +414,9 @@ const MainMenu = () => {
                       Çelebi Rehber
                     </Button>
                     {hasSpecialAccess && (
-                      <Button variant="outline" className="gap-2 border-amber-500/40 text-amber-300 hover:bg-amber-500/10" onClick={() => navigate("/special-member") }>
+                      <Button variant="outline" className="gap-2 border-amber-500/40 text-amber-300 hover:bg-amber-500/10" onClick={() => navigate("/chef-daily") }>
                         <Star className="h-4 w-4" />
-                        Ozel Sekme
+                        Chef-Daily
                       </Button>
                     )}
                   </div>
@@ -534,10 +534,10 @@ const MainMenu = () => {
               <CardContent className="flex items-center justify-between p-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-amber-300/80">Ozel</p>
-                  <p className="mt-2 font-heading text-2xl">Kisisel Alan</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Sadece bu hesaba acik ozel sekme</p>
+                  <p className="mt-2 font-heading text-2xl">Chef-Daily</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Sadece bu hesaba acik departure kontrol paneli</p>
                 </div>
-                <Button size="sm" variant="secondary" className="shrink-0" onClick={() => navigate("/special-member")}>Aç</Button>
+                <Button size="sm" variant="secondary" className="shrink-0" onClick={() => navigate("/chef-daily")}>Aç</Button>
               </CardContent>
             </Card>
           )}
