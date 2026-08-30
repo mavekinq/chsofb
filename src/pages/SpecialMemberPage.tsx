@@ -33,6 +33,14 @@ const STAGE_BUTTON_ACTIVE_STYLES: Record<FlightStage, string> = {
 type ChefDailyStatusRow = {
   flight_key: string;
   stage: FlightStage;
+  updated_at: string;
+  updated_by: string | null;
+};
+
+type FlightStatusMeta = {
+  stage: FlightStage;
+  updatedAt: string;
+  updatedBy: string | null;
 };
 
 const getFlightKey = (flight: FlightPlanEntry) => [
@@ -45,8 +53,26 @@ const sortByDepartureTime = (left: FlightPlanEntry, right: FlightPlanEntry) => {
   return (left.departureTime || "99:99").localeCompare(right.departureTime || "99:99", "tr");
 };
 
+const formatStatusTimestamp = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Saat bilgisi yok";
+  }
+
+  return date.toLocaleString("tr-TR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 const mapStatusRows = (rows: ChefDailyStatusRow[]) => {
-  return Object.fromEntries(rows.map((row) => [row.flight_key, row.stage])) as Record<string, FlightStage>;
+  return Object.fromEntries(rows.map((row) => [row.flight_key, {
+    stage: row.stage,
+    updatedAt: row.updated_at,
+    updatedBy: row.updated_by,
+  }])) as Record<string, FlightStatusMeta>;
 };
 
 const SpecialMemberPage = () => {
@@ -56,7 +82,7 @@ const SpecialMemberPage = () => {
   const hasAccess = useMemo(() => hasSpecialMemberAccess(securityNumber), [securityNumber]);
   const [flights, setFlights] = useState<FlightPlanEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [stageByFlight, setStageByFlight] = useState<Record<string, FlightStage>>({});
+  const [statusByFlight, setStatusByFlight] = useState<Record<string, FlightStatusMeta>>({});
   const [savingFlightKey, setSavingFlightKey] = useState<string | null>(null);
   const snapshotDate = useMemo(() => getIstanbulDateKey(), []);
 
@@ -88,7 +114,7 @@ const SpecialMemberPage = () => {
           fetchFlightPlanEntriesMerged(),
           supabase
             .from("chef_daily_flight_statuses")
-            .select("flight_key, stage")
+            .select("flight_key, stage, updated_at, updated_by")
             .eq("snapshot_date", snapshotDate),
         ]);
 
@@ -105,7 +131,7 @@ const SpecialMemberPage = () => {
           .sort(sortByDepartureTime);
 
         setFlights(departureFlights);
-        setStageByFlight(mapStatusRows((statusesResponse.data || []) as ChefDailyStatusRow[]));
+        setStatusByFlight(mapStatusRows((statusesResponse.data || []) as ChefDailyStatusRow[]));
       } catch (error) {
         if (!cancelled) {
           console.error("Chef-Daily load failed:", error);
@@ -130,12 +156,18 @@ const SpecialMemberPage = () => {
         "postgres_changes",
         { event: "*", schema: "public", table: "chef_daily_flight_statuses" },
         (payload) => {
-          const nextRecord = (payload.new || payload.old) as { snapshot_date?: string; flight_key?: string; stage?: FlightStage };
+          const nextRecord = (payload.new || payload.old) as {
+            snapshot_date?: string;
+            flight_key?: string;
+            stage?: FlightStage;
+            updated_at?: string;
+            updated_by?: string | null;
+          };
           if (nextRecord.snapshot_date !== snapshotDate || !nextRecord.flight_key) {
             return;
           }
 
-          setStageByFlight((prev) => {
+          setStatusByFlight((prev) => {
             const next = { ...prev };
 
             if (payload.eventType === "DELETE") {
@@ -143,8 +175,12 @@ const SpecialMemberPage = () => {
               return next;
             }
 
-            if (nextRecord.stage) {
-              next[nextRecord.flight_key as string] = nextRecord.stage;
+            if (nextRecord.stage && nextRecord.updated_at) {
+              next[nextRecord.flight_key as string] = {
+                stage: nextRecord.stage,
+                updatedAt: nextRecord.updated_at,
+                updatedBy: nextRecord.updated_by || null,
+              };
             }
 
             return next;
@@ -162,7 +198,7 @@ const SpecialMemberPage = () => {
 
   const handleStageChange = async (flight: FlightPlanEntry, stage: FlightStage) => {
     const flightKey = getFlightKey(flight);
-    const currentStage = stageByFlight[flightKey];
+    const currentStage = statusByFlight[flightKey]?.stage;
     setSavingFlightKey(flightKey);
 
     try {
@@ -177,7 +213,7 @@ const SpecialMemberPage = () => {
           throw error;
         }
 
-        setStageByFlight((prev) => {
+        setStatusByFlight((prev) => {
           const next = { ...prev };
           delete next[flightKey];
           return next;
@@ -201,9 +237,13 @@ const SpecialMemberPage = () => {
         throw error;
       }
 
-      setStageByFlight((prev) => ({
+      setStatusByFlight((prev) => ({
         ...prev,
-        [flightKey]: stage,
+        [flightKey]: {
+          stage,
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser || null,
+        },
       }));
     } catch (error) {
       console.error("Chef-Daily stage update failed:", error);
@@ -275,7 +315,8 @@ const SpecialMemberPage = () => {
               <div className="grid gap-3 lg:grid-cols-2">
                 {flights.map((flight) => {
                   const flightKey = getFlightKey(flight);
-                  const activeStage = stageByFlight[flightKey];
+                  const flightStatus = statusByFlight[flightKey];
+                  const activeStage = flightStatus?.stage;
                   const isSaving = savingFlightKey === flightKey;
 
                   return (
@@ -295,6 +336,11 @@ const SpecialMemberPage = () => {
                             <p className="text-sm text-muted-foreground">
                               {flight.departureIATA || "Bilinmiyor"} • {flight.aircraftType || "Tip yok"}
                             </p>
+                            {flightStatus && (
+                              <p className="text-xs text-muted-foreground">
+                                Son guncelleyen: {flightStatus.updatedBy || "Bilinmiyor"} • {formatStatusTimestamp(flightStatus.updatedAt)}
+                              </p>
+                            )}
                           </div>
 
                           <div className="text-right shrink-0">
