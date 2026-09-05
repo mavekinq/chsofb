@@ -1682,6 +1682,10 @@ const WheelchairServicesPage = () => {
                         const serviceCount = getServiceCountForFlight(flight);
                         const gate = getDisplayGate(flight);
                         const terminal = resolveFlightTerminal(flight);
+                        const gateLabel = terminal === "T1" ? "-" : gate;
+                        const routeLabel = terminal === "T1"
+                          ? `AYT → ${flight.source_city || "-"}`
+                          : `${flight.dep_iata} → ${flight.arr_iata}`;
                         const departureTimestamp = getFlightDepartureTimestamp(flight);
                         const isCounterClosedForFlight = terminal
                           ? isCounterClosed(terminal, departureTimestamp)
@@ -1702,58 +1706,6 @@ const WheelchairServicesPage = () => {
                                 </div>
                               </div>
                             )}
-                            {terminal === "T1" ? (
-                              <Card className="overflow-hidden border-border/60 hover:border-primary/40 transition-colors">
-                                <CardContent className="p-4 space-y-3">
-                                  <div className="flex items-center justify-between">
-                                    <h3 className="font-heading font-bold text-base">{flight.flight_iata || "-"}</h3>
-                                    <Badge variant="secondary">İç Hat</Badge>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                                    <div>
-                                      <p className="text-muted-foreground">Uçuş</p>
-                                      <p className="font-medium">{flight.flight_iata || "-"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground">Tarih</p>
-                                      <p className="font-medium">{flight.source_date || "-"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground">Havayolu</p>
-                                      <p className="font-medium">{flight.source_airline || flight.airline_iata || "-"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground">Şehir</p>
-                                      <p className="font-medium">{flight.source_city || "-"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground">Saat</p>
-                                      <p className="font-medium">{flight.dep_time || "-"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground">Tahmini</p>
-                                      <p className="font-medium">{flight.dep_estimated || "-"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground">Kontuar</p>
-                                      <p className="font-medium">{flight.source_counter || "-"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground">Terminal</p>
-                                      <p className="font-medium">{flight.source_terminal || "D"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground">Durum</p>
-                                      <p className="font-medium">{flight.status || "-"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground">Gate</p>
-                                      <p className="font-medium">-</p>
-                                    </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            ) : (
                             <Card
                               className={cn(
                                 "overflow-hidden transition-all duration-200",
@@ -1790,8 +1742,13 @@ const WheelchairServicesPage = () => {
                                         )}
                                       </div>
                                       <p className="text-xs mt-0.5 text-muted-foreground">
-                                        {flight.dep_iata} → {flight.arr_iata}
+                                        {routeLabel}
                                       </p>
+                                      {terminal === "T1" && (
+                                        <p className="text-[11px] mt-1 text-muted-foreground">
+                                          {flight.source_date || "-"} • {flight.source_airline || flight.airline_iata || "-"} • Kontuar {flight.source_counter || "-"} • {flight.status || "-"}
+                                        </p>
+                                      )}
                                     </div>
                                   </div>
 
@@ -1809,7 +1766,7 @@ const WheelchairServicesPage = () => {
                                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                                     <span className="flex items-center gap-1">
                                       <MapPin className="w-3 h-3" />
-                                      Gate {gate}
+                                      Gate {gateLabel}
                                     </span>
                                     {flight.delayed && flight.delayed > 0 && (
                                       <span className="flex items-center gap-1 text-orange-600 font-medium">
@@ -1865,7 +1822,6 @@ const WheelchairServicesPage = () => {
                                 </div>
                               </CardContent>
                             </Card>
-                            )}
                           </div>
                         );
                       })}
