@@ -137,6 +137,7 @@ const OFFLINE_CACHE_KEYS = {
 } as const;
 
 const T1_ALLOWED_FLIGHT_PREFIXES = new Set(["PC"]);
+const PEGASUS_LOGO_URL = "https://www.antalya-airport.aero/images/content/airlinelogos/PGT.jpg";
 
 type FetchTavFlightsFunctionResult = {
   success: boolean;
@@ -208,6 +209,16 @@ const getFlightCodePrefixes = (value: string) => {
 const isAllowedT1Flight = (rawFlightCode: string) =>
   getFlightCodePrefixes(rawFlightCode).some((prefix) => T1_ALLOWED_FLIGHT_PREFIXES.has(prefix));
 
+const isPegasusFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
+  const tokens = [
+    ...getFlightCodePrefixes(flight.flight_iata || ""),
+    String(flight.airline_iata || "").trim().toUpperCase(),
+    String(flight.source_airline || "").trim().toUpperCase(),
+  ];
+
+  return tokens.some((token) => token === "PC" || token === "PGT" || token.includes("PEGASUS"));
+};
+
 const parseDomesticFlightsFromHtml = (html: string) => {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, "text/html");
@@ -220,7 +231,7 @@ const parseDomesticFlightsFromHtml = (html: string) => {
       const scheduled = row.querySelector("td.time.scheduled span")?.textContent?.trim() || "";
       const estimated = row.querySelector("td.time.estimated span")?.textContent?.trim() || "";
       const gateOrCounter = row.querySelector("td.belt span")?.textContent?.trim() || "";
-      const statusLabel = row.querySelector("td.status span")?.textContent?.trim() || "scheduled";
+      const statusLabel = row.querySelector("td.status span")?.textContent?.trim() || "";
 
       if (!isAllowedT1Flight(rawFlight)) {
         return null;
@@ -242,14 +253,14 @@ const parseDomesticFlightsFromHtml = (html: string) => {
         dep_iata: "AYT",
         dep_terminal: "T1",
         dep_gate: gateOrCounter || null,
-        dep_time: effectiveTime,
+        dep_time: scheduled || estimated,
         dep_time_ts: depMinutes !== null ? buildIstanbulTimestamp(depMinutes, depDayOffset) : 0,
         dep_estimated: estimated || undefined,
         dep_estimated_ts: estimated && depMinutes !== null ? buildIstanbulTimestamp(depMinutes, depDayOffset) : undefined,
         arr_iata: "",
         plannedPosition: gateOrCounter || undefined,
         parkPosition: gateOrCounter || undefined,
-        status: statusLabel || "scheduled",
+        status: statusLabel,
         duration: 0,
         delayed: undefined,
         source_date: dateLabel || undefined,
@@ -1686,6 +1697,10 @@ const WheelchairServicesPage = () => {
                         const routeLabel = terminal === "T1"
                           ? `AYT → ${flight.source_city || "-"}`
                           : `${flight.dep_iata} → ${flight.arr_iata}`;
+                        const scheduledTime = String(flight.dep_time || "").trim();
+                        const estimatedTime = String(flight.dep_estimated || "").trim();
+                        const showEstimatedAsDelay = Boolean(estimatedTime) && estimatedTime !== scheduledTime;
+                        const statusText = terminal === "T1" ? String(flight.status || "").trim() : "";
                         const departureTimestamp = getFlightDepartureTimestamp(flight);
                         const isCounterClosedForFlight = terminal
                           ? isCounterClosed(terminal, departureTimestamp)
@@ -1720,10 +1735,19 @@ const WheelchairServicesPage = () => {
                                       "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
                                       "bg-primary/10",
                                     )}>
-                                      <Plane className={cn(
-                                        "w-5 h-5",
-                                        "text-primary",
-                                      )} />
+                                      {isPegasusFlight(flight) ? (
+                                        <img
+                                          src={PEGASUS_LOGO_URL}
+                                          alt="Pegasus"
+                                          className="w-8 h-8 rounded-md object-cover"
+                                          loading="lazy"
+                                        />
+                                      ) : (
+                                        <Plane className={cn(
+                                          "w-5 h-5",
+                                          "text-primary",
+                                        )} />
+                                      )}
                                     </div>
                                     <div className="min-w-0">
                                       <div className="flex items-center gap-2 flex-wrap">
@@ -1746,7 +1770,7 @@ const WheelchairServicesPage = () => {
                                       </p>
                                       {terminal === "T1" && (
                                         <p className="text-[11px] mt-1 text-muted-foreground">
-                                          {flight.source_date || "-"} • {flight.source_airline || flight.airline_iata || "-"} • Kontuar {flight.source_counter || "-"} • {flight.status || "-"}
+                                          {flight.source_date || "-"} • {flight.source_airline || flight.airline_iata || "-"} • Kontuar {flight.source_counter || "-"}
                                         </p>
                                       )}
                                     </div>
@@ -1754,9 +1778,23 @@ const WheelchairServicesPage = () => {
 
                                   {/* Right: Time */}
                                   <div className="text-right flex-shrink-0">
-                                    <p className="font-mono font-bold text-base text-foreground">
-                                      {formatFlightTime(flight)}
-                                    </p>
+                                    {showEstimatedAsDelay ? (
+                                      <>
+                                        <p className="font-mono text-xs text-muted-foreground line-through">
+                                          {scheduledTime || "-"}
+                                        </p>
+                                        <p className="font-mono font-bold text-base text-red-600">
+                                          {estimatedTime}
+                                        </p>
+                                      </>
+                                    ) : (
+                                      <p className="font-mono font-bold text-base text-foreground">
+                                        {formatFlightTime(flight)}
+                                      </p>
+                                    )}
+                                    {statusText && (
+                                      <p className="text-[11px] mt-0.5 text-muted-foreground">{statusText}</p>
+                                    )}
                                   </div>
                                 </div>
 
