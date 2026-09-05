@@ -118,6 +118,11 @@ const parseFlightsFromContent = (content: string) => {
   return parseProxyMarkdownFlights(content);
 };
 
+const isPcFlight = (flightNo: string) => {
+  const normalized = String(flightNo || "").trim().toUpperCase();
+  return normalized.startsWith("PC/") || normalized.startsWith("PC ") || normalized.startsWith("PC");
+};
+
 const Tav2FlightsPage = () => {
   const navigate = useNavigate();
   const [allFlights, setAllFlights] = useState<TavFlight[]>([]);
@@ -147,9 +152,10 @@ const Tav2FlightsPage = () => {
         if (result.success && result.html) {
           const functionFlights = parseFlightsFromContent(result.html);
           if (functionFlights.length > 0) {
-            setAllFlights(functionFlights);
+            const pcFlights = functionFlights.filter((item) => isPcFlight(item.flightNo));
+            setAllFlights(pcFlights);
             setLastUpdated(new Date());
-            setSourceInfo(`Tam liste: ${result.rowCount || functionFlights.length} uçuş (${result.source || "edge"})`);
+            setSourceInfo(`Tam liste: ${pcFlights.length} PC uçuş (${result.source || "edge"})`);
             return;
           }
         }
@@ -161,9 +167,10 @@ const Tav2FlightsPage = () => {
       const directFlights = parseFlightsFromContent(directContent);
 
       if (directFlights.length > 0) {
-        setAllFlights(directFlights);
+        const pcFlights = directFlights.filter((item) => isPcFlight(item.flightNo));
+        setAllFlights(pcFlights);
         setLastUpdated(new Date());
-        setSourceInfo(`Direkt kaynak: ${directFlights.length} uçuş`);
+        setSourceInfo(`Direkt kaynak: ${pcFlights.length} PC uçuş`);
         return;
       }
       throw new Error("No flights in direct response");
@@ -178,9 +185,10 @@ const Tav2FlightsPage = () => {
           throw new Error("No flights in proxy response");
         }
 
-        setAllFlights(proxyFlights);
+        const pcFlights = proxyFlights.filter((item) => isPcFlight(item.flightNo));
+        setAllFlights(pcFlights);
         setLastUpdated(new Date());
-        setSourceInfo(`Proxy kaynak: ${proxyFlights.length} uçuş (ilk bölüm)`);
+        setSourceInfo(`Proxy kaynak: ${pcFlights.length} PC uçuş (ilk bölüm)`);
       } catch (proxyError) {
         console.error("TAV2 flights fetch failed:", proxyError);
         setError("TAV iç hat uçuş verileri alınamadı.");
