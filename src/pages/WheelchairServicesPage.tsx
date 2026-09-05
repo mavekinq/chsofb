@@ -131,9 +131,6 @@ const OFFLINE_CACHE_KEYS = {
   wheelchairs: "wheelchair-services:wheelchairs",
 } as const;
 
-const ANTALYA_DOMESTIC_DEPARTURES_URL = "https://www.antalya-airport.aero/yolcu-ve-ziyaretciler/ucus-bilgileri/yurtici-gidis";
-const ANTALYA_DOMESTIC_DEPARTURES_PROXY_URL = `https://r.jina.ai/http://${ANTALYA_DOMESTIC_DEPARTURES_URL.replace(/^https?:\/\//, "")}`;
-
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const extractAirlineCode = (value: string) => {
@@ -145,109 +142,6 @@ const extractFlightNumber = (value: string) => {
   const normalized = normalizeFlightCode(value);
   const airlineCode = extractAirlineCode(normalized);
   return normalized.slice(airlineCode.length);
-};
-
-const parseAirportDateToDayOffset = (value: string) => {
-  const match = String(value || "").trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-  if (!match) return 0;
-
-  const [, dayRaw, monthRaw, yearRaw] = match;
-  const day = Number(dayRaw);
-  const month = Number(monthRaw);
-  const year = Number(yearRaw);
-
-  const { year: todayYear, month: todayMonth, day: todayDay } = getIstanbulDateParts();
-  const todayUtc = Date.UTC(todayYear, (todayMonth || 1) - 1, todayDay || 1, 0, 0, 0);
-  const targetUtc = Date.UTC(year, (month || 1) - 1, day || 1, 0, 0, 0);
-  return Math.round((targetUtc - todayUtc) / (24 * 60 * 60 * 1000));
-};
-
-const parseDomesticFlightCode = (rawValue: string) => {
-  const raw = String(rawValue || "").trim().toUpperCase();
-  const match = raw.match(/^([A-Z0-9]+)(?:\/([A-Z0-9]+))?\s*([0-9]{1,5})$/);
-  if (!match) {
-    const compact = normalizeFlightCode(raw).replace(/[^A-Z0-9]/g, "");
-    return {
-      airlineIata: extractAirlineCode(compact),
-      flightIata: compact,
-      flightNumber: extractFlightNumber(compact),
-    };
-  }
-
-  const primary = match[1] || "";
-  const number = match[3] || "";
-  const flightIata = normalizeFlightCode(`${primary}${number}`).replace(/[^A-Z0-9]/g, "");
-
-  return {
-    airlineIata: primary,
-    flightIata,
-    flightNumber: number,
-  };
-};
-
-const parseAntalyaDomesticFlightsFromHtml = (html: string) => {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-  const rows = Array.from(doc.querySelectorAll("#ContentPlaceHolder_ForNested_ContentPlaceHolder_ForNested_div_list tbody tr"));
-
-  return rows
-    .map((row, index) => {
-      const rawFlight = row.querySelector("td.flightnum span")?.textContent?.trim() || "";
-      const dateLabel = row.querySelector("td.date span")?.textContent?.trim() || "";
-      const scheduled = row.querySelector("td.time.scheduled span")?.textContent?.trim() || "";
-      const estimated = row.querySelector("td.time.estimated span")?.textContent?.trim() || "";
-      const gateOrCounter = row.querySelector("td.belt span")?.textContent?.trim() || "";
-      const statusLabel = row.querySelector("td.status span")?.textContent?.trim() || "scheduled";
-
-      const { airlineIata, flightIata, flightNumber } = parseDomesticFlightCode(rawFlight);
-      const effectiveTime = estimated || scheduled;
-      const depMinutes = parseDepartureMinutes(effectiveTime);
-      const depDayOffset = parseAirportDateToDayOffset(dateLabel);
-
-      return {
-        airline_iata: airlineIata,
-        flight_iata: flightIata,
-        flight_number: flightNumber,
-        list_order: index,
-        dep_day_offset: depDayOffset,
-        arrivalCode: undefined,
-        arrivalTime: undefined,
-        dep_iata: "AYT",
-        dep_terminal: "T1",
-        dep_gate: gateOrCounter || null,
-        dep_time: effectiveTime,
-        dep_time_ts: depMinutes !== null ? buildIstanbulTimestamp(depMinutes, depDayOffset) : 0,
-        dep_estimated: estimated || undefined,
-        dep_estimated_ts: estimated && depMinutes !== null ? buildIstanbulTimestamp(depMinutes, depDayOffset) : undefined,
-        arr_iata: "",
-        plannedPosition: gateOrCounter || undefined,
-        parkPosition: gateOrCounter || undefined,
-        status: statusLabel || "scheduled",
-        duration: 0,
-        delayed: undefined,
-      } satisfies Flight;
-    })
-    .filter((flight) => Boolean(flight.flight_iata));
-};
-
-const fetchAntalyaDomesticFlights = async (): Promise<Flight[]> => {
-  const urlsToTry = [ANTALYA_DOMESTIC_DEPARTURES_URL, ANTALYA_DOMESTIC_DEPARTURES_PROXY_URL];
-
-  for (const url of urlsToTry) {
-    try {
-      const response = await fetch(url);
-      if (!response.ok) continue;
-      const html = await response.text();
-      const flights = parseAntalyaDomesticFlightsFromHtml(html);
-      if (flights.length > 0) {
-        return flights;
-      }
-    } catch {
-      // Try next source.
-    }
-  }
-
-  return [];
 };
 
 const parseDepartureMinutes = (value: string) => {
@@ -707,10 +601,7 @@ const WheelchairServicesPage = () => {
     try {
       const nowSeconds = getIstanbulNowSeconds();
       // Snapshot + canlı CSV birleşik veri (süreklilik)
-      const [mergeResult, antalyaDomesticFlights] = await Promise.all([
-        fetchFlightPlanEntriesMergedWithWindow(),
-        fetchAntalyaDomesticFlights(),
-      ]);
+      const mergeResult = await fetchFlightPlanEntriesMergedWithWindow();
       const flightPlanEntries = mergeResult.entries;
       const nowMinutes = getIstanbulNowMinutes();
       const departureTimestamps = buildDepartureTimestamps(
@@ -755,15 +646,8 @@ const WheelchairServicesPage = () => {
         })
         .filter((flight) => Boolean(flight.flight_iata));
 
-      const flightsWithDomesticSource = antalyaDomesticFlights.length > 0
-        ? [
-            ...antalyaDomesticFlights,
-            ...mappedFlights.filter((flight) => flight.dep_terminal !== "T1"),
-          ]
-        : mappedFlights;
-
-      const passedFlights = flightsWithDomesticSource.filter((flight) => flight.dep_time_ts > 0 && flight.dep_time_ts <= nowSeconds);
-      const visibleFlights = flightsWithDomesticSource.filter((flight) => flight.dep_time_ts <= 0 || flight.dep_time_ts > nowSeconds);
+      const passedFlights = mappedFlights.filter((flight) => flight.dep_time_ts > 0 && flight.dep_time_ts <= nowSeconds);
+      const visibleFlights = mappedFlights.filter((flight) => flight.dep_time_ts <= 0 || flight.dep_time_ts > nowSeconds);
 
       const nextGateSnapshot: Record<string, string> = {};
       visibleFlights.forEach((flight) => {
