@@ -22,6 +22,7 @@ const VISIBLE_PATHS = [
   "/wheelchair-system",
   "/wheelchair-services",
   "/flights",
+  "/tav",
   "/work-schedule",
   "/directory",
   "/settings",
