@@ -3,8 +3,19 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SOURCE_URL = "https://www.antalya-airport.aero/yolcu-ve-ziyaretciler/ucus-bilgileri/dis-hat-gidis";
 const MORE_EVENT_TARGET = "ctl00$ctl00$ContentPlaceHolder_ForNested$ContentPlaceHolder_ForNested$LinkButton_More";
+const FLIGHT_SOURCE_URLS = {
+  international: "https://www.antalya-airport.aero/yolcu-ve-ziyaretciler/ucus-bilgileri/dis-hat-gidis",
+  domestic: "https://www.antalya-airport.aero/yolcu-ve-ziyaretciler/ucus-bilgileri/yurtici-gidis",
+} as const;
+
+type FlightSourceKey = keyof typeof FLIGHT_SOURCE_URLS;
+
+const resolveSourceKey = (value: unknown): FlightSourceKey => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "domestic") return "domestic";
+  return "international";
+};
 
 const getInputValue = (html: string, fieldId: string, fieldName = fieldId) => {
   const regex = new RegExp(
@@ -32,7 +43,11 @@ Deno.serve(async (request: Request) => {
   }
 
   try {
-    const baseResponse = await fetch(`${SOURCE_URL}?_t=${Date.now()}`, {
+    const payload = await request.json().catch(() => ({}));
+    const sourceKey = resolveSourceKey((payload as { source?: unknown }).source);
+    const sourceUrl = FLIGHT_SOURCE_URLS[sourceKey];
+
+    const baseResponse = await fetch(`${sourceUrl}?_t=${Date.now()}`, {
       headers: {
         "Cache-Control": "no-cache",
         "User-Agent": "Mozilla/5.0",
@@ -66,6 +81,7 @@ Deno.serve(async (request: Request) => {
         rowCount: baseRows,
         html: baseHtml,
         source: "initial",
+        sourceKey,
       }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -83,7 +99,7 @@ Deno.serve(async (request: Request) => {
     form.set("ctl00$ctl00$ContentPlaceHolder_ForNested$ContentPlaceHolder_ForNested$RadDateTimePicker_Start$dateInput", startDateInput);
     form.set("ctl00$ctl00$ContentPlaceHolder_ForNested$ContentPlaceHolder_ForNested$RadDateTimePicker_End$dateInput", endDateInput);
 
-    const moreResponse = await fetch(SOURCE_URL, {
+    const moreResponse = await fetch(sourceUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -99,6 +115,7 @@ Deno.serve(async (request: Request) => {
         rowCount: baseRows,
         html: baseHtml,
         source: "initial",
+        sourceKey,
       }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -114,6 +131,7 @@ Deno.serve(async (request: Request) => {
       rowCount: Math.max(baseRows, moreRows),
       html: finalHtml,
       source: moreRows > baseRows ? "postback-more" : "initial",
+      sourceKey,
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

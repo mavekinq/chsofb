@@ -19,6 +19,7 @@ import SettingsPage from "./pages/SettingsPage.tsx";
 import ExcelRedirect from "./pages/ExcelRedirect.tsx";
 import SpecialMemberPage from "./pages/SpecialMemberPage.tsx";
 import TavFlightsPage from "./pages/TavFlightsPage.tsx";
+import Tav2FlightsPage from "./pages/Tav2FlightsPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,7 @@ const App = () => (
           <Route path="/excel" element={<ExcelRedirect />} />
           <Route path="/chef-daily" element={<SpecialMemberPage />} />
           <Route path="/tav" element={<TavFlightsPage />} />
+          <Route path="/tav2" element={<Tav2FlightsPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -26,8 +26,8 @@ type TavFlight = {
   status: string;
 };
 
-const SOURCE_URL = "https://www.antalya-airport.aero/yolcu-ve-ziyaretciler/ucus-bilgileri/dis-hat-gidis";
-const SOURCE_PROXY_URL = "https://r.jina.ai/https://www.antalya-airport.aero/yolcu-ve-ziyaretciler/ucus-bilgileri/dis-hat-gidis";
+const SOURCE_URL = "https://www.antalya-airport.aero/yolcu-ve-ziyaretciler/ucus-bilgileri/yurtici-gidis";
+const SOURCE_PROXY_URL = "https://r.jina.ai/https://www.antalya-airport.aero/yolcu-ve-ziyaretciler/ucus-bilgileri/yurtici-gidis";
 
 type FetchTavFlightsFunctionResult = {
   success: boolean;
@@ -118,7 +118,7 @@ const parseFlightsFromContent = (content: string) => {
   return parseProxyMarkdownFlights(content);
 };
 
-const TavFlightsPage = () => {
+const Tav2FlightsPage = () => {
   const navigate = useNavigate();
   const [allFlights, setAllFlights] = useState<TavFlight[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,7 +139,7 @@ const TavFlightsPage = () => {
 
     try {
       const { data, error: functionError } = await supabase.functions.invoke("fetch-tav-flights", {
-        body: { mode: "all", source: "international" },
+        body: { mode: "all", source: "domestic" },
       });
 
       if (!functionError) {
@@ -182,8 +182,8 @@ const TavFlightsPage = () => {
         setLastUpdated(new Date());
         setSourceInfo(`Proxy kaynak: ${proxyFlights.length} uçuş (ilk bölüm)`);
       } catch (proxyError) {
-        console.error("TAV flights fetch failed:", proxyError);
-        setError("TAV uçuş verileri alınamadı.");
+        console.error("TAV2 flights fetch failed:", proxyError);
+        setError("TAV iç hat uçuş verileri alınamadı.");
       }
     } finally {
       setLoading(false);
@@ -229,7 +229,7 @@ const TavFlightsPage = () => {
             <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
               <Plane className="w-4 h-4 text-primary" />
             </div>
-            <h1 className="font-heading font-bold text-lg">TAV Dış Hat Gidiş</h1>
+            <h1 className="font-heading font-bold text-lg">TAV İç Hat Gidiş</h1>
           </div>
 
           <Button variant="outline" size="sm" onClick={() => fetchFlights(true)} disabled={refreshing} className="gap-1.5">
@@ -301,4 +301,4 @@ const TavFlightsPage = () => {
   );
 };
 
-export default TavFlightsPage;
+export default Tav2FlightsPage;
