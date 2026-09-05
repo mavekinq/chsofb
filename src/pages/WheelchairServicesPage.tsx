@@ -68,6 +68,11 @@ interface Flight {
   status: string;
   duration: number;
   delayed?: number;
+  source_date?: string;
+  source_airline?: string;
+  source_city?: string;
+  source_counter?: string;
+  source_terminal?: string;
 }
 
 interface WheelchairService {
@@ -131,6 +136,8 @@ const OFFLINE_CACHE_KEYS = {
   wheelchairs: "wheelchair-services:wheelchairs",
 } as const;
 
+const T1_ALLOWED_FLIGHT_PREFIXES = new Set(["PC"]);
+
 type FetchTavFlightsFunctionResult = {
   success: boolean;
   rowCount?: number;
@@ -191,6 +198,16 @@ const parseAirportFlightCode = (rawValue: string) => {
   };
 };
 
+const getFlightCodePrefixes = (value: string) => {
+  const normalized = String(value || "").trim().toUpperCase();
+  const [firstToken = ""] = normalized.split(/\s+/);
+  const [primary, secondary] = firstToken.split("/");
+  return [primary, secondary].filter(Boolean);
+};
+
+const isAllowedT1Flight = (rawFlightCode: string) =>
+  getFlightCodePrefixes(rawFlightCode).some((prefix) => T1_ALLOWED_FLIGHT_PREFIXES.has(prefix));
+
 const parseDomesticFlightsFromHtml = (html: string) => {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, "text/html");
@@ -204,6 +221,10 @@ const parseDomesticFlightsFromHtml = (html: string) => {
       const estimated = row.querySelector("td.time.estimated span")?.textContent?.trim() || "";
       const gateOrCounter = row.querySelector("td.belt span")?.textContent?.trim() || "";
       const statusLabel = row.querySelector("td.status span")?.textContent?.trim() || "scheduled";
+
+      if (!isAllowedT1Flight(rawFlight)) {
+        return null;
+      }
 
       const { airlineIata, flightIata, flightNumber } = parseAirportFlightCode(rawFlight);
       const effectiveTime = estimated || scheduled;
@@ -231,9 +252,14 @@ const parseDomesticFlightsFromHtml = (html: string) => {
         status: statusLabel || "scheduled",
         duration: 0,
         delayed: undefined,
+        source_date: dateLabel || undefined,
+        source_airline: row.querySelector("td.airline .icongroup span")?.textContent?.trim() || undefined,
+        source_city: row.querySelector("td.from span")?.textContent?.trim() || undefined,
+        source_counter: gateOrCounter || undefined,
+        source_terminal: row.querySelector("td.terminal span")?.textContent?.trim() || undefined,
       } satisfies Flight;
     })
-    .filter((flight) => Boolean(flight.flight_iata));
+    .filter((flight): flight is Flight => Boolean(flight && flight.flight_iata));
 };
 
 const fetchDomesticTavFlights = async (): Promise<Flight[]> => {
@@ -1312,13 +1338,15 @@ const WheelchairServicesPage = () => {
   );
 
   const sortedFilteredFlights = useMemo(() => {
-    const flts = filteredFlights.filter((flight) => {
-      if (!q) return true;
-      return [flight.flight_iata, flight.flight_number, flight.arr_iata, flight.dep_gate, flight.airline_iata]
-        .join(" ")
-        .toLocaleLowerCase("tr")
-        .includes(q);
-    });
+    const flts = activeTab === "T1"
+      ? [...filteredFlights]
+      : filteredFlights.filter((flight) => {
+          if (!q) return true;
+          return [flight.flight_iata, flight.flight_number, flight.arr_iata, flight.dep_gate, flight.airline_iata]
+            .join(" ")
+            .toLocaleLowerCase("tr")
+            .includes(q);
+        });
     // Keep merged order within each day-offset group, but always render next-day flights as one trailing block.
     return flts.sort((a, b) => {
       if (a.dep_day_offset !== b.dep_day_offset) {
@@ -1674,6 +1702,58 @@ const WheelchairServicesPage = () => {
                                 </div>
                               </div>
                             )}
+                            {terminal === "T1" ? (
+                              <Card className="overflow-hidden border-border/60 hover:border-primary/40 transition-colors">
+                                <CardContent className="p-4 space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <h3 className="font-heading font-bold text-base">{flight.flight_iata || "-"}</h3>
+                                    <Badge variant="secondary">İç Hat</Badge>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                                    <div>
+                                      <p className="text-muted-foreground">Uçuş</p>
+                                      <p className="font-medium">{flight.flight_iata || "-"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Tarih</p>
+                                      <p className="font-medium">{flight.source_date || "-"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Havayolu</p>
+                                      <p className="font-medium">{flight.source_airline || flight.airline_iata || "-"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Şehir</p>
+                                      <p className="font-medium">{flight.source_city || "-"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Saat</p>
+                                      <p className="font-medium">{flight.dep_time || "-"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Tahmini</p>
+                                      <p className="font-medium">{flight.dep_estimated || "-"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Kontuar</p>
+                                      <p className="font-medium">{flight.source_counter || "-"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Terminal</p>
+                                      <p className="font-medium">{flight.source_terminal || "D"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Durum</p>
+                                      <p className="font-medium">{flight.status || "-"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Gate</p>
+                                      <p className="font-medium">-</p>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ) : (
                             <Card
                               className={cn(
                                 "overflow-hidden transition-all duration-200",
@@ -1785,6 +1865,7 @@ const WheelchairServicesPage = () => {
                                 </div>
                               </CardContent>
                             </Card>
+                            )}
                           </div>
                         );
                       })}
