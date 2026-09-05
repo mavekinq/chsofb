@@ -137,6 +137,9 @@ const OFFLINE_CACHE_KEYS = {
 } as const;
 
 const T1_ALLOWED_FLIGHT_PREFIXES = new Set(["PC"]);
+const T2_ALLOWED_FLIGHT_PREFIXES = new Set([
+  "PC", "4M", "3Z", "BY", "B2", "AH", "LX", "6D", "QS", "KC", "OR", "XY", "7O", "HY", "6B", "IA", "TOM", "A2", "6K", "J2", "SN", "KU", "TB",
+]);
 const PEGASUS_LOGO_URL = "/pegasus-logo.jpg";
 
 type FetchTavFlightsFunctionResult = {
@@ -209,6 +212,9 @@ const getFlightCodePrefixes = (value: string) => {
 const isAllowedT1Flight = (rawFlightCode: string) =>
   getFlightCodePrefixes(rawFlightCode).some((prefix) => T1_ALLOWED_FLIGHT_PREFIXES.has(prefix));
 
+const isAllowedT2Flight = (rawFlightCode: string) =>
+  getFlightCodePrefixes(rawFlightCode).some((prefix) => T2_ALLOWED_FLIGHT_PREFIXES.has(prefix));
+
 const isPegasusFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
   const tokens = [
     ...getFlightCodePrefixes(flight.flight_iata || ""),
@@ -273,6 +279,60 @@ const parseDomesticFlightsFromHtml = (html: string) => {
     .filter((flight): flight is Flight => Boolean(flight && flight.flight_iata));
 };
 
+const parseInternationalFlightsFromHtml = (html: string) => {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  const rows = Array.from(doc.querySelectorAll("#ContentPlaceHolder_ForNested_ContentPlaceHolder_ForNested_div_list tbody tr"));
+
+  return rows
+    .map((row, index) => {
+      const rawFlight = row.querySelector("td.flightnum span")?.textContent?.trim() || "";
+      const dateLabel = row.querySelector("td.date span")?.textContent?.trim() || "";
+      const scheduled = row.querySelector("td.time.scheduled span")?.textContent?.trim() || "";
+      const estimated = row.querySelector("td.time.estimated span")?.textContent?.trim() || "";
+      const gateOrCounter = row.querySelector("td.belt span")?.textContent?.trim() || "";
+      const statusLabel = row.querySelector("td.status span")?.textContent?.trim() || "";
+
+      if (!isAllowedT2Flight(rawFlight)) {
+        return null;
+      }
+
+      const { airlineIata, flightIata, flightNumber } = parseAirportFlightCode(rawFlight);
+      const effectiveTime = estimated || scheduled;
+      const depMinutes = parseDepartureMinutes(effectiveTime);
+      const depDayOffset = parseAirportDateToDayOffset(dateLabel);
+
+      return {
+        airline_iata: airlineIata,
+        flight_iata: flightIata,
+        flight_number: flightNumber,
+        list_order: index,
+        dep_day_offset: depDayOffset,
+        arrivalCode: undefined,
+        arrivalTime: undefined,
+        dep_iata: "AYT",
+        dep_terminal: "T2",
+        dep_gate: gateOrCounter || null,
+        dep_time: scheduled || estimated,
+        dep_time_ts: depMinutes !== null ? buildIstanbulTimestamp(depMinutes, depDayOffset) : 0,
+        dep_estimated: estimated || undefined,
+        dep_estimated_ts: estimated && depMinutes !== null ? buildIstanbulTimestamp(depMinutes, depDayOffset) : undefined,
+        arr_iata: "",
+        plannedPosition: gateOrCounter || undefined,
+        parkPosition: gateOrCounter || undefined,
+        status: statusLabel,
+        duration: 0,
+        delayed: undefined,
+        source_date: dateLabel || undefined,
+        source_airline: row.querySelector("td.airline .icongroup span")?.textContent?.trim() || undefined,
+        source_city: row.querySelector("td.from span")?.textContent?.trim() || undefined,
+        source_counter: gateOrCounter || undefined,
+        source_terminal: row.querySelector("td.terminal span")?.textContent?.trim() || undefined,
+      } satisfies Flight;
+    })
+    .filter((flight): flight is Flight => Boolean(flight && flight.flight_iata));
+};
+
 const fetchDomesticTavFlights = async (): Promise<Flight[]> => {
   try {
     const { data, error } = await supabase.functions.invoke("fetch-tav-flights", {
@@ -289,6 +349,27 @@ const fetchDomesticTavFlights = async (): Promise<Flight[]> => {
     }
 
     return parseDomesticFlightsFromHtml(result.html);
+  } catch {
+    return [];
+  }
+};
+
+const fetchInternationalTavFlights = async (): Promise<Flight[]> => {
+  try {
+    const { data, error } = await supabase.functions.invoke("fetch-tav-flights", {
+      body: { source: "international" },
+    });
+
+    if (error) {
+      return [];
+    }
+
+    const result = (data || { success: false }) as FetchTavFlightsFunctionResult;
+    if (!result.success || !result.html) {
+      return [];
+    }
+
+    return parseInternationalFlightsFromHtml(result.html);
   } catch {
     return [];
   }
@@ -751,9 +832,10 @@ const WheelchairServicesPage = () => {
     try {
       const nowSeconds = getIstanbulNowSeconds();
       // Snapshot + canlı CSV birleşik veri (süreklilik)
-      const [mergeResult, domesticTavFlights] = await Promise.all([
+      const [mergeResult, domesticTavFlights, internationalTavFlights] = await Promise.all([
         fetchFlightPlanEntriesMergedWithWindow(),
         fetchDomesticTavFlights(),
+        fetchInternationalTavFlights(),
       ]);
       const flightPlanEntries = mergeResult.entries;
       const nowMinutes = getIstanbulNowMinutes();
@@ -799,12 +881,14 @@ const WheelchairServicesPage = () => {
         })
         .filter((flight) => Boolean(flight.flight_iata));
 
-      const mergedFlights = domesticTavFlights.length > 0
-        ? [
-            ...domesticTavFlights,
-            ...mappedFlights.filter((flight) => flight.dep_terminal !== "T1"),
-          ]
-        : mappedFlights;
+      const t1Flights = domesticTavFlights.length > 0
+        ? domesticTavFlights
+        : mappedFlights.filter((flight) => flight.dep_terminal === "T1");
+      const t2Flights = internationalTavFlights.length > 0
+        ? internationalTavFlights
+        : mappedFlights.filter((flight) => flight.dep_terminal !== "T1");
+
+      const mergedFlights = [...t1Flights, ...t2Flights];
 
       const passedFlights = mergedFlights.filter((flight) => flight.dep_time_ts > 0 && flight.dep_time_ts <= nowSeconds);
       const visibleFlights = mergedFlights.filter((flight) => flight.dep_time_ts <= 0 || flight.dep_time_ts > nowSeconds);
@@ -1694,8 +1778,8 @@ const WheelchairServicesPage = () => {
                         const gate = getDisplayGate(flight);
                         const terminal = resolveFlightTerminal(flight);
                         const gateLabel = terminal === "T1" ? "-" : gate;
-                        const routeLabel = terminal === "T1"
-                          ? `AYT → ${flight.source_city || "-"}`
+                        const routeLabel = flight.source_city
+                          ? `AYT → ${flight.source_city}`
                           : `${flight.dep_iata} → ${flight.arr_iata}`;
                         const dateText = terminal === "T1" ? String(flight.source_date || "").trim() : "";
                         const scheduledTime = String(flight.dep_time || "").trim();
