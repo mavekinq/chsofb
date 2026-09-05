@@ -1697,6 +1697,7 @@ const WheelchairServicesPage = () => {
                         const routeLabel = terminal === "T1"
                           ? `AYT → ${flight.source_city || "-"}`
                           : `${flight.dep_iata} → ${flight.arr_iata}`;
+                        const dateText = terminal === "T1" ? String(flight.source_date || "").trim() : "";
                         const scheduledTime = String(flight.dep_time || "").trim();
                         const estimatedTime = String(flight.dep_estimated || "").trim();
                         const showEstimatedAsDelay = Boolean(estimatedTime) && estimatedTime !== scheduledTime;
@@ -1732,14 +1733,14 @@ const WheelchairServicesPage = () => {
                                   {/* Left: Airline icon + info */}
                                   <div className="flex items-start gap-3 flex-1 min-w-0">
                                     <div className={cn(
-                                      "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
+                                      "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden",
                                       "bg-primary/10",
                                     )}>
                                       {isPegasusFlight(flight) ? (
                                         <img
                                           src={PEGASUS_LOGO_URL}
                                           alt="Pegasus"
-                                          className="w-8 h-8 rounded-md object-cover"
+                                          className="w-full h-full object-cover"
                                           loading="lazy"
                                         />
                                       ) : (
@@ -1770,7 +1771,7 @@ const WheelchairServicesPage = () => {
                                       </p>
                                       {terminal === "T1" && (
                                         <p className="text-[11px] mt-1 text-muted-foreground">
-                                          {flight.source_date || "-"} • {flight.source_airline || flight.airline_iata || "-"} • Kontuar {flight.source_counter || "-"}
+                                          {flight.source_airline || flight.airline_iata || "-"} • Kontuar {flight.source_counter || "-"}
                                         </p>
                                       )}
                                     </div>
@@ -1778,6 +1779,9 @@ const WheelchairServicesPage = () => {
 
                                   {/* Right: Time */}
                                   <div className="text-right flex-shrink-0">
+                                    {dateText && (
+                                      <p className="text-[11px] text-muted-foreground mb-0.5">{dateText}</p>
+                                    )}
                                     {showEstimatedAsDelay ? (
                                       <>
                                         <p className="font-mono text-xs text-muted-foreground line-through">
