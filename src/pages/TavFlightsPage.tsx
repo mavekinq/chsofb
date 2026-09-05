@@ -28,6 +28,9 @@ type TavFlight = {
 
 const SOURCE_URL = "https://www.antalya-airport.aero/yolcu-ve-ziyaretciler/ucus-bilgileri/dis-hat-gidis";
 const SOURCE_PROXY_URL = "https://r.jina.ai/https://www.antalya-airport.aero/yolcu-ve-ziyaretciler/ucus-bilgileri/dis-hat-gidis";
+const TAV_ALLOWED_FLIGHT_PREFIXES = new Set([
+  "PC", "4M", "3Z", "BY", "B2", "AH", "LX", "6D", "QS", "KC", "OR", "XY", "7O", "HY", "6B", "IA", "TOM", "A2", "6K", "J2", "SN", "KU", "TB",
+]);
 
 type FetchTavFlightsFunctionResult = {
   success: boolean;
@@ -118,6 +121,16 @@ const parseFlightsFromContent = (content: string) => {
   return parseProxyMarkdownFlights(content);
 };
 
+const getFlightPrefix = (flightNo: string) => {
+  const normalized = String(flightNo || "").trim().toUpperCase();
+  const [firstToken = ""] = normalized.split(/\s+/);
+  const [primary, secondary] = firstToken.split("/");
+  return [primary, secondary].filter(Boolean);
+};
+
+const isAllowedTavFlight = (flightNo: string) =>
+  getFlightPrefix(flightNo).some((prefix) => TAV_ALLOWED_FLIGHT_PREFIXES.has(prefix));
+
 const TavFlightsPage = () => {
   const navigate = useNavigate();
   const [allFlights, setAllFlights] = useState<TavFlight[]>([]);
@@ -147,9 +160,10 @@ const TavFlightsPage = () => {
         if (result.success && result.html) {
           const functionFlights = parseFlightsFromContent(result.html);
           if (functionFlights.length > 0) {
-            setAllFlights(functionFlights);
+            const allowedFlights = functionFlights.filter((item) => isAllowedTavFlight(item.flightNo));
+            setAllFlights(allowedFlights);
             setLastUpdated(new Date());
-            setSourceInfo(`Tam liste: ${result.rowCount || functionFlights.length} uçuş (${result.source || "edge"})`);
+            setSourceInfo(`Tam liste: ${allowedFlights.length} seçili uçuş (${result.source || "edge"})`);
             return;
           }
         }
@@ -161,9 +175,10 @@ const TavFlightsPage = () => {
       const directFlights = parseFlightsFromContent(directContent);
 
       if (directFlights.length > 0) {
-        setAllFlights(directFlights);
+        const allowedFlights = directFlights.filter((item) => isAllowedTavFlight(item.flightNo));
+        setAllFlights(allowedFlights);
         setLastUpdated(new Date());
-        setSourceInfo(`Direkt kaynak: ${directFlights.length} uçuş`);
+        setSourceInfo(`Direkt kaynak: ${allowedFlights.length} seçili uçuş`);
         return;
       }
       throw new Error("No flights in direct response");
@@ -178,9 +193,10 @@ const TavFlightsPage = () => {
           throw new Error("No flights in proxy response");
         }
 
-        setAllFlights(proxyFlights);
+        const allowedFlights = proxyFlights.filter((item) => isAllowedTavFlight(item.flightNo));
+        setAllFlights(allowedFlights);
         setLastUpdated(new Date());
-        setSourceInfo(`Proxy kaynak: ${proxyFlights.length} uçuş (ilk bölüm)`);
+        setSourceInfo(`Proxy kaynak: ${allowedFlights.length} seçili uçuş (ilk bölüm)`);
       } catch (proxyError) {
         console.error("TAV flights fetch failed:", proxyError);
         setError("TAV uçuş verileri alınamadı.");
