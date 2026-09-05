@@ -141,6 +141,7 @@ const T2_ALLOWED_FLIGHT_PREFIXES = new Set([
   "PC", "4M", "3Z", "BY", "B2", "AH", "LX", "6D", "QS", "KC", "OR", "XY", "7O", "HY", "6B", "IA", "TOM", "A2", "6K", "J2", "SN", "KU", "TB",
 ]);
 const PEGASUS_LOGO_URL = "/pegasus-logo.jpg";
+const MGA_LOGO_URL = "/mga-logo.svg";
 
 type FetchTavFlightsFunctionResult = {
   success: boolean;
@@ -223,6 +224,28 @@ const isPegasusFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "
   ];
 
   return tokens.some((token) => token === "PC" || token === "PGT" || token.includes("PEGASUS"));
+};
+
+const isMgaFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
+  const tokens = [
+    ...getFlightCodePrefixes(flight.flight_iata || ""),
+    String(flight.airline_iata || "").trim().toUpperCase(),
+    String(flight.source_airline || "").trim().toUpperCase(),
+  ];
+
+  return tokens.some((token) => token === "4M" || token.includes("MGA") || token.includes("MAVI") || token.includes("GOK"));
+};
+
+const getFlightLogo = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
+  if (isPegasusFlight(flight)) {
+    return { src: PEGASUS_LOGO_URL, alt: "Pegasus", badgeClassName: "bg-[#ffcf2e]" };
+  }
+
+  if (isMgaFlight(flight)) {
+    return { src: MGA_LOGO_URL, alt: "MGA", badgeClassName: "bg-white border border-[#d8e1eb]" };
+  }
+
+  return null;
 };
 
 const parseDomesticFlightsFromHtml = (html: string) => {
@@ -1777,19 +1800,27 @@ const WheelchairServicesPage = () => {
                         const serviceCount = getServiceCountForFlight(flight);
                         const gate = getDisplayGate(flight);
                         const terminal = resolveFlightTerminal(flight);
-                        const gateLabel = terminal === "T1" ? "-" : gate;
+                        const isTavStyledFlight = Boolean(
+                          String(flight.source_city || "").trim()
+                          || String(flight.source_date || "").trim()
+                          || String(flight.source_airline || "").trim()
+                          || String(flight.source_counter || "").trim()
+                          || String(flight.source_terminal || "").trim(),
+                        );
+                        const gateLabel = isTavStyledFlight ? "-" : gate;
                         const routeLabel = flight.source_city
                           ? `AYT → ${flight.source_city}`
                           : `${flight.dep_iata} → ${flight.arr_iata}`;
-                        const dateText = terminal === "T1" ? String(flight.source_date || "").trim() : "";
+                        const dateText = isTavStyledFlight ? String(flight.source_date || "").trim() : "";
                         const scheduledTime = String(flight.dep_time || "").trim();
                         const estimatedTime = String(flight.dep_estimated || "").trim();
                         const showEstimatedAsDelay = Boolean(estimatedTime) && estimatedTime !== scheduledTime;
-                        const statusText = terminal === "T1" ? String(flight.status || "").trim() : "";
+                        const statusText = isTavStyledFlight ? String(flight.status || "").trim() : "";
                         const departureTimestamp = getFlightDepartureTimestamp(flight);
                         const isCounterClosedForFlight = terminal
                           ? isCounterClosed(terminal, departureTimestamp)
                           : false;
+                        const flightLogo = getFlightLogo(flight);
                         const shouldShowNextDayDivider =
                           flight.dep_day_offset > 0
                           && (index === 0 || sortedFilteredFlights[index - 1].dep_day_offset === 0);
@@ -1818,12 +1849,12 @@ const WheelchairServicesPage = () => {
                                   <div className="flex items-start gap-3 flex-1 min-w-0">
                                     <div className={cn(
                                       "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden",
-                                      isPegasusFlight(flight) ? "bg-[#ffcf2e]" : "bg-primary/10",
+                                      flightLogo?.badgeClassName || "bg-primary/10",
                                     )}>
-                                      {isPegasusFlight(flight) ? (
+                                      {flightLogo ? (
                                         <img
-                                          src={PEGASUS_LOGO_URL}
-                                          alt="Pegasus"
+                                          src={flightLogo.src}
+                                          alt={flightLogo.alt}
                                           className="w-full h-full object-contain"
                                           loading="lazy"
                                         />
@@ -1853,7 +1884,7 @@ const WheelchairServicesPage = () => {
                                       <p className="text-xs mt-0.5 text-muted-foreground">
                                         {routeLabel}
                                       </p>
-                                      {terminal === "T1" && (
+                                      {isTavStyledFlight && (
                                         <p className="text-[11px] mt-1 text-muted-foreground">
                                           {flight.source_airline || flight.airline_iata || "-"} • Kontuar {flight.source_counter || "-"}
                                         </p>
