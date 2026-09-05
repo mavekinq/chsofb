@@ -137,7 +137,7 @@ const OFFLINE_CACHE_KEYS = {
 } as const;
 
 const T1_ALLOWED_FLIGHT_PREFIXES = new Set(["PC"]);
-const PEGASUS_LOGO_URL = "https://www.antalya-airport.aero/images/content/airlinelogos/PGT.jpg";
+const PEGASUS_LOGO_URL = "/pegasus-logo.jpg";
 
 type FetchTavFlightsFunctionResult = {
   success: boolean;
@@ -1734,13 +1734,13 @@ const WheelchairServicesPage = () => {
                                   <div className="flex items-start gap-3 flex-1 min-w-0">
                                     <div className={cn(
                                       "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden",
-                                      "bg-primary/10",
+                                      isPegasusFlight(flight) ? "bg-[#ffcf2e]" : "bg-primary/10",
                                     )}>
                                       {isPegasusFlight(flight) ? (
                                         <img
                                           src={PEGASUS_LOGO_URL}
                                           alt="Pegasus"
-                                          className="w-full h-full object-cover"
+                                          className="w-full h-full object-contain"
                                           loading="lazy"
                                         />
                                       ) : (
