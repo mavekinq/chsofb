@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Plane, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Table,
   TableBody,
@@ -27,6 +28,14 @@ type TavFlight = {
 
 const SOURCE_URL = "https://www.antalya-airport.aero/yolcu-ve-ziyaretciler/ucus-bilgileri/dis-hat-gidis";
 const SOURCE_PROXY_URL = "https://r.jina.ai/https://www.antalya-airport.aero/yolcu-ve-ziyaretciler/ucus-bilgileri/dis-hat-gidis";
+
+type FetchTavFlightsFunctionResult = {
+  success: boolean;
+  rowCount?: number;
+  html?: string;
+  source?: string;
+  error?: string;
+};
 
 const fixMojibake = (value: string) => {
   if (!value || (!value.includes("Ã") && !value.includes("Ä") && !value.includes("Å") && !value.includes("Ä°"))) {
@@ -117,6 +126,7 @@ const TavFlightsPage = () => {
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [sourceInfo, setSourceInfo] = useState("");
 
   const fetchFlights = async (silent = false) => {
     if (silent) {
@@ -125,8 +135,26 @@ const TavFlightsPage = () => {
       setLoading(true);
     }
     setError("");
+    setSourceInfo("");
 
     try {
+      const { data, error: functionError } = await supabase.functions.invoke("fetch-tav-flights", {
+        body: { mode: "all" },
+      });
+
+      if (!functionError) {
+        const result = (data || { success: false, error: "Bilinmeyen yanit" }) as FetchTavFlightsFunctionResult;
+        if (result.success && result.html) {
+          const functionFlights = parseFlightsFromContent(result.html);
+          if (functionFlights.length > 0) {
+            setAllFlights(functionFlights);
+            setLastUpdated(new Date());
+            setSourceInfo(`Tam liste: ${result.rowCount || functionFlights.length} uçuş (${result.source || "edge"})`);
+            return;
+          }
+        }
+      }
+
       const directResponse = await fetch(SOURCE_URL);
       if (!directResponse.ok) throw new Error(`Source request failed: ${directResponse.status}`);
       const directContent = await directResponse.text();
@@ -135,9 +163,9 @@ const TavFlightsPage = () => {
       if (directFlights.length > 0) {
         setAllFlights(directFlights);
         setLastUpdated(new Date());
+        setSourceInfo(`Direkt kaynak: ${directFlights.length} uçuş`);
         return;
       }
-
       throw new Error("No flights in direct response");
     } catch {
       try {
@@ -152,6 +180,7 @@ const TavFlightsPage = () => {
 
         setAllFlights(proxyFlights);
         setLastUpdated(new Date());
+        setSourceInfo(`Proxy kaynak: ${proxyFlights.length} uçuş (ilk bölüm)`);
       } catch (proxyError) {
         console.error("TAV flights fetch failed:", proxyError);
         setError("TAV uçuş verileri alınamadı.");
@@ -225,6 +254,7 @@ const TavFlightsPage = () => {
             {filteredFlights.length} uçuş • {lastUpdated ? lastUpdated.toLocaleTimeString("tr-TR") : "-"}
           </p>
         </div>
+        {sourceInfo ? <p className="text-xs text-muted-foreground">{sourceInfo}</p> : null}
 
         {loading ? (
           <div className="text-center py-14 text-muted-foreground">Uçuş verileri yükleniyor...</div>
