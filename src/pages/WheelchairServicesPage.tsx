@@ -1976,18 +1976,30 @@ const WheelchairServicesPage = () => {
 
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                    {hasGateInfo && (
-                                      <span className="flex items-center gap-1">
-                                        <MapPin className="w-3 h-3" />
-                                        Gate {gateLabel}
-                                      </span>
-                                    )}
-                                    {hasCounterInfo && !hasGateInfo && (
-                                      <span className="flex items-center gap-1">
-                                        <MapPin className="w-3 h-3" />
-                                        Kontuar {counterLabel}
-                                      </span>
-                                    )}
+                                    <div className="flex min-w-[120px] flex-col gap-1">
+                                      {hasCounterInfo ? (
+                                        <span className="flex items-center gap-1">
+                                          <MapPin className="w-3 h-3" />
+                                          Kontuar {counterLabel}
+                                        </span>
+                                      ) : (
+                                        <span className="flex items-center gap-1 opacity-0">
+                                          <MapPin className="w-3 h-3" />
+                                          Kontuar -
+                                        </span>
+                                      )}
+                                      {hasGateInfo ? (
+                                        <span className="flex items-center gap-1">
+                                          <MapPin className="w-3 h-3" />
+                                          Gate {gateLabel}
+                                        </span>
+                                      ) : (
+                                        <span className="flex items-center gap-1 opacity-0">
+                                          <MapPin className="w-3 h-3" />
+                                          Gate -
+                                        </span>
+                                      )}
+                                    </div>
                                     {flight.delayed && flight.delayed > 0 && (
                                       <span className="flex items-center gap-1 text-orange-600 font-medium">
                                         <AlertTriangle className="w-3 h-3" />
