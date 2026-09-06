@@ -33,7 +33,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
-import { fetchFlightPlanEntriesMerged, fetchFlightPlanEntriesMergedWithWindow, getFlightCodeMatchKeys, getIstanbulDateKey, normalizeFlightCode } from "@/lib/flight-plan";
+import { createFlightPlanPositionLookup, fetchFlightPlanEntriesMerged, fetchFlightPlanEntriesMergedWithWindow, getFlightCodeMatchKeys, getIstanbulDateKey, normalizeFlightCode } from "@/lib/flight-plan";
 import { triggerServicePushNotification } from "@/lib/notifications";
 import { readOfflineCache, saveOfflineCache } from "@/lib/offline-cache";
 import { getOnShiftOFBCount, getOnShiftUserNames } from "@/lib/work-schedule";
@@ -926,9 +926,26 @@ const WheelchairServicesPage = () => {
         : mappedFlights.filter((flight) => flight.dep_terminal !== "T1");
 
       const mergedFlights = [...t1Flights, ...t2Flights];
+      const flightPlanPositionLookup = createFlightPlanPositionLookup(flightPlanEntries);
+      const enrichedFlights = mergedFlights.map((flight) => {
+        const gateFromFlightPlan = getFlightCodeMatchKeys(flight.flight_iata)
+          .map((key) => flightPlanPositionLookup.get(key))
+          .find((value): value is string => Boolean(value));
 
-      const passedFlights = mergedFlights.filter((flight) => flight.dep_time_ts > 0 && flight.dep_time_ts <= nowSeconds);
-      const visibleFlights = mergedFlights.filter((flight) => flight.dep_time_ts <= 0 || flight.dep_time_ts > nowSeconds);
+        if (!gateFromFlightPlan) {
+          return flight;
+        }
+
+        return {
+          ...flight,
+          dep_gate: gateFromFlightPlan,
+          plannedPosition: gateFromFlightPlan,
+          parkPosition: gateFromFlightPlan,
+        };
+      });
+
+      const passedFlights = enrichedFlights.filter((flight) => flight.dep_time_ts > 0 && flight.dep_time_ts <= nowSeconds);
+      const visibleFlights = enrichedFlights.filter((flight) => flight.dep_time_ts <= 0 || flight.dep_time_ts > nowSeconds);
 
       const nextGateSnapshot: Record<string, string> = {};
       visibleFlights.forEach((flight) => {
