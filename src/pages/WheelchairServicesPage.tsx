@@ -726,6 +726,20 @@ const WheelchairServicesPage = () => {
     return getTerminalFromDestination(flight.arr_iata);
   };
 
+  const getStatusToneClassName = (statusText: string) => {
+    const normalized = statusText.toLocaleLowerCase("tr-TR");
+
+    if (normalized.includes("kontuar açık") || normalized.includes("kontuar acik") || normalized.includes("açık") || normalized.includes("acik")) {
+      return "text-green-600";
+    }
+
+    if (normalized.includes("kapı kapalı") || normalized.includes("kapi kapali") || normalized.includes("kalktı") || normalized.includes("kalkti") || normalized.includes("kapalı") || normalized.includes("kapali")) {
+      return "text-red-600";
+    }
+
+    return "text-muted-foreground";
+  };
+
   const formatFlightTime = (flight: Flight) => {
     const rawTime = String(flight.dep_estimated || flight.dep_time || "").trim();
     const parsedMinutes = parseDepartureMinutes(rawTime);
@@ -1816,10 +1830,6 @@ const WheelchairServicesPage = () => {
                         const estimatedTime = String(flight.dep_estimated || "").trim();
                         const showEstimatedAsDelay = Boolean(estimatedTime) && estimatedTime !== scheduledTime;
                         const statusText = isTavStyledFlight ? String(flight.status || "").trim() : "";
-                        const departureTimestamp = getFlightDepartureTimestamp(flight);
-                        const isCounterClosedForFlight = terminal
-                          ? isCounterClosed(terminal, departureTimestamp)
-                          : false;
                         const flightLogo = getFlightLogo(flight);
                         const shouldShowNextDayDivider =
                           flight.dep_day_offset > 0
@@ -1912,7 +1922,7 @@ const WheelchairServicesPage = () => {
                                       </p>
                                     )}
                                     {statusText && (
-                                      <p className="text-[11px] mt-0.5 text-muted-foreground">{statusText}</p>
+                                      <p className={cn("text-[11px] mt-0.5 font-medium", getStatusToneClassName(statusText))}>{statusText}</p>
                                     )}
                                   </div>
                                 </div>
@@ -1959,22 +1969,17 @@ const WheelchairServicesPage = () => {
                                         <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500" />
                                       )}
                                     </Button>
-                                    <div className="flex flex-col items-end gap-1">
-                                      {isCounterClosedForFlight && (
-                                        <span className="text-[10px] font-semibold text-red-600">Kontuar kapalı</span>
-                                      )}
                                     <Button
-                                    size="sm"
-                                    onClick={() => {
-                                      setSelectedFlight(flight);
-                                      setShowServiceDialog(true);
-                                    }}
-                                    className="gap-1.5 text-xs h-8 rounded-lg"
-                                  >
-                                    <Plus className="w-3.5 h-3.5" />
-                                    Hizmet Ekle
-                                  </Button>
-                                    </div>
+                                      size="sm"
+                                      onClick={() => {
+                                        setSelectedFlight(flight);
+                                        setShowServiceDialog(true);
+                                      }}
+                                      className="gap-1.5 text-xs h-8 rounded-lg"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      Hizmet Ekle
+                                    </Button>
                                   </div>
                                 </div>
                               </CardContent>
