@@ -1851,6 +1851,7 @@ const WheelchairServicesPage = () => {
                           || String(flight.source_terminal || "").trim(),
                         );
                         const gateLabel = isTavStyledFlight ? (gate === "-" ? "-" : gate) : gate;
+                        const hasGateInfo = Boolean(gateLabel && gateLabel !== "-");
                         const routeLabel = flight.source_city
                           ? `AYT → ${flight.source_city}`
                           : `${flight.dep_iata} → ${flight.arr_iata}`;
@@ -1923,7 +1924,7 @@ const WheelchairServicesPage = () => {
                                       <p className="text-xs mt-0.5 text-muted-foreground">
                                         {routeLabel}
                                       </p>
-                                      {isTavStyledFlight && (
+                                      {isTavStyledFlight && !hasGateInfo && (
                                         <p className="text-[11px] mt-1 text-muted-foreground">
                                           {flight.source_airline || flight.airline_iata || "-"} • Kontuar {flight.source_counter || "-"}
                                         </p>
