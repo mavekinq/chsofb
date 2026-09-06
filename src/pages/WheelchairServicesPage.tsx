@@ -1962,15 +1962,10 @@ const WheelchairServicesPage = () => {
 
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                    {hasGateInfo ? (
+                                    {hasGateInfo && (
                                       <span className="flex items-center gap-1">
                                         <MapPin className="w-3 h-3" />
                                         Gate {gateLabel}
-                                      </span>
-                                    ) : (
-                                      <span className="flex items-center gap-1">
-                                        <MapPin className="w-3 h-3" />
-                                        Kontuar {counterLabel}
                                       </span>
                                     )}
                                     {flight.delayed && flight.delayed > 0 && (
