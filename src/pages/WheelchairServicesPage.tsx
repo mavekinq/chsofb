@@ -1487,15 +1487,27 @@ const WheelchairServicesPage = () => {
   );
 
   const sortedFilteredFlights = useMemo(() => {
-    const flts = activeTab === "T1"
-      ? [...filteredFlights]
-      : filteredFlights.filter((flight) => {
-          if (!q) return true;
-          return [flight.flight_iata, flight.flight_number, flight.arr_iata, flight.dep_gate, flight.airline_iata]
-            .join(" ")
-            .toLocaleLowerCase("tr")
-            .includes(q);
-        });
+    const flts = filteredFlights.filter((flight) => {
+      if (!q) return true;
+      const cityText = flight.source_city || "";
+      const routeText = flight.source_city ? `AYT → ${flight.source_city}` : `${flight.dep_iata} → ${flight.arr_iata}`;
+      return [
+        flight.flight_iata,
+        flight.flight_number,
+        flight.arr_iata,
+        flight.dep_gate,
+        flight.airline_iata,
+        flight.dep_iata,
+        cityText,
+        routeText,
+        flight.source_airline,
+        flight.source_terminal,
+        flight.source_counter,
+      ]
+        .join(" ")
+        .toLocaleLowerCase("tr")
+        .includes(q);
+    });
     // Keep merged order within each day-offset group, but always render next-day flights as one trailing block.
     return flts.sort((a, b) => {
       if (a.dep_day_offset !== b.dep_day_offset) {
@@ -1838,7 +1850,7 @@ const WheelchairServicesPage = () => {
                           || String(flight.source_counter || "").trim()
                           || String(flight.source_terminal || "").trim(),
                         );
-                        const gateLabel = isTavStyledFlight ? "-" : gate;
+                        const gateLabel = isTavStyledFlight ? (gate === "-" ? "-" : gate) : gate;
                         const routeLabel = flight.source_city
                           ? `AYT → ${flight.source_city}`
                           : `${flight.dep_iata} → ${flight.arr_iata}`;
@@ -1950,7 +1962,7 @@ const WheelchairServicesPage = () => {
                                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                                     <span className="flex items-center gap-1">
                                       <MapPin className="w-3 h-3" />
-                                      Gate {gateLabel}
+                                      Gate {gateLabel || "-"}
                                     </span>
                                     {flight.delayed && flight.delayed > 0 && (
                                       <span className="flex items-center gap-1 text-orange-600 font-medium">
