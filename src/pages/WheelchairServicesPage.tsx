@@ -1852,6 +1852,7 @@ const WheelchairServicesPage = () => {
                         );
                         const gateLabel = isTavStyledFlight ? (gate === "-" ? "-" : gate) : gate;
                         const hasGateInfo = Boolean(gateLabel && gateLabel !== "-");
+                        const counterLabel = flight.source_counter || "-";
                         const routeLabel = flight.source_city
                           ? `AYT → ${flight.source_city}`
                           : `${flight.dep_iata} → ${flight.arr_iata}`;
@@ -1961,10 +1962,17 @@ const WheelchairServicesPage = () => {
 
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                    <span className="flex items-center gap-1">
-                                      <MapPin className="w-3 h-3" />
-                                      Gate {gateLabel || "-"}
-                                    </span>
+                                    {hasGateInfo ? (
+                                      <span className="flex items-center gap-1">
+                                        <MapPin className="w-3 h-3" />
+                                        Gate {gateLabel}
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-1">
+                                        <MapPin className="w-3 h-3" />
+                                        Kontuar {counterLabel}
+                                      </span>
+                                    )}
                                     {flight.delayed && flight.delayed > 0 && (
                                       <span className="flex items-center gap-1 text-orange-600 font-medium">
                                         <AlertTriangle className="w-3 h-3" />
