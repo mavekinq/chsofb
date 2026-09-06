@@ -514,12 +514,24 @@ const getTerminalFromDestination = (destinationIata?: string | null) => {
 
 const getDisplayGate = (flight?: Pick<Flight, "plannedPosition" | "dep_gate" | "parkPosition"> | null) => {
   if (!flight) return "-";
-  return (
+  const gateValue =
     normalizeGateValue(flight.plannedPosition) ||
-    normalizeGateValue(flight.parkPosition) ||
-    normalizeGateValue(flight.dep_gate) ||
-    "-"
-  );
+    normalizeGateValue(flight.parkPosition);
+
+  return gateValue || "-";
+};
+
+const getDisplayCounter = (flight?: Pick<Flight, "source_counter" | "plannedPosition" | "dep_gate" | "parkPosition"> | null) => {
+  if (!flight) return null;
+
+  const sourceCounter = normalizeGateValue(flight.source_counter);
+  if (sourceCounter) return sourceCounter;
+
+  if (!normalizeGateValue(flight.plannedPosition) && !normalizeGateValue(flight.parkPosition)) {
+    return normalizeGateValue(flight.dep_gate);
+  }
+
+  return null;
 };
 
 const isServiceCompleted = (service: Pick<WheelchairService, "notes">) =>
@@ -1842,6 +1854,7 @@ const WheelchairServicesPage = () => {
                       {sortedFilteredFlights.map((flight, index) => {
                         const serviceCount = getServiceCountForFlight(flight);
                         const gate = getDisplayGate(flight);
+                        const counter = getDisplayCounter(flight);
                         const terminal = resolveFlightTerminal(flight);
                         const isTavStyledFlight = Boolean(
                           String(flight.source_city || "").trim()
@@ -1850,9 +1863,10 @@ const WheelchairServicesPage = () => {
                           || String(flight.source_counter || "").trim()
                           || String(flight.source_terminal || "").trim(),
                         );
-                        const gateLabel = isTavStyledFlight ? (gate === "-" ? "-" : gate) : gate;
+                        const gateLabel = gate === "-" ? "-" : gate;
+                        const counterLabel = counter || "-";
                         const hasGateInfo = Boolean(gateLabel && gateLabel !== "-");
-                        const counterLabel = flight.source_counter || "-";
+                        const hasCounterInfo = Boolean(counterLabel && counterLabel !== "-");
                         const routeLabel = flight.source_city
                           ? `AYT → ${flight.source_city}`
                           : `${flight.dep_iata} → ${flight.arr_iata}`;
@@ -1966,6 +1980,12 @@ const WheelchairServicesPage = () => {
                                       <span className="flex items-center gap-1">
                                         <MapPin className="w-3 h-3" />
                                         Gate {gateLabel}
+                                      </span>
+                                    )}
+                                    {hasCounterInfo && !hasGateInfo && (
+                                      <span className="flex items-center gap-1">
+                                        <MapPin className="w-3 h-3" />
+                                        Kontuar {counterLabel}
                                       </span>
                                     )}
                                     {flight.delayed && flight.delayed > 0 && (
