@@ -409,14 +409,6 @@ const MainMenu = () => {
                       <Plane className="h-4 w-4" />
                       Uçuşlar
                     </Button>
-                    <Button variant="outline" className="gap-2" onClick={() => navigate("/tav")}>
-                      <Plane className="h-4 w-4" />
-                      TAV Uçuş
-                    </Button>
-                    <Button variant="outline" className="gap-2" onClick={() => navigate("/tav2")}>
-                      <Plane className="h-4 w-4" />
-                      TAV İç Hat
-                    </Button>
                     <Button variant="outline" className="gap-2" onClick={() => navigate("/directory")}>
                       <Phone className="h-4 w-4" />
                       Çelebi Rehber
