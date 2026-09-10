@@ -223,7 +223,13 @@ const isPegasusFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "
     String(flight.source_airline || "").trim().toUpperCase(),
   ];
 
-  return tokens.some((token) => token === "PC" || token === "PGT" || token.includes("PEGASUS"));
+  return tokens.some((token) =>
+    token === "PC"
+    || token === "QS"
+    || token === "3Z"
+    || token === "PGT"
+    || token.includes("PEGASUS")
+  );
 };
 
 const isMgaFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
