@@ -957,10 +957,10 @@ const WheelchairServicesPage = () => {
       });
 
       const passedFlights = enrichedFlights.filter((flight) => flight.dep_time_ts > 0 && flight.dep_time_ts <= nowSeconds);
-      const visibleFlights = enrichedFlights.filter((flight) => flight.dep_time_ts <= 0 || flight.dep_time_ts > nowSeconds);
+      const flightsToDisplay = enrichedFlights;
 
       const nextGateSnapshot: Record<string, string> = {};
-      visibleFlights.forEach((flight) => {
+      flightsToDisplay.forEach((flight) => {
         const gate = normalizeGateValue(flight.dep_gate || flight.plannedPosition || flight.parkPosition || "") || "";
         nextGateSnapshot[flight.flight_iata] = gate;
       });
@@ -971,8 +971,8 @@ const WheelchairServicesPage = () => {
 
       lastFlightGateSnapshotRef.current = nextGateSnapshot;
 
-      setFlights(visibleFlights);
-      saveOfflineCache(OFFLINE_CACHE_KEYS.flights, { flights: visibleFlights, savedAt: new Date().toISOString() });
+      setFlights(flightsToDisplay);
+      saveOfflineCache(OFFLINE_CACHE_KEYS.flights, { flights: flightsToDisplay, savedAt: new Date().toISOString() });
       void autoCompleteExpiredServices(passedFlights);
       setLastUpdated(new Date());
     } catch (error) {
@@ -1153,6 +1153,13 @@ const WheelchairServicesPage = () => {
   useEffect(() => {
     const user = localStorage.getItem("userName");
     if (user) setCurrentUser(user);
+
+    const cachedFlights = readOfflineCache<{ flights: Flight[] }>(OFFLINE_CACHE_KEYS.flights);
+    if (cachedFlights?.flights && cachedFlights.flights.length > 0) {
+      setFlights(cachedFlights.flights);
+      setLastUpdated(new Date(cachedFlights.savedAt || Date.now()));
+      setLoading(false);
+    }
 
     fetchFlights();
     fetchServices();
