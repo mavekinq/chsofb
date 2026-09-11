@@ -143,6 +143,7 @@ const T2_ALLOWED_FLIGHT_PREFIXES = new Set([
 ]);
 const PEGASUS_LOGO_URL = "/pegasus-logo.jpg";
 const MGA_LOGO_URL = "/mga-logo.svg";
+const SPECIAL_BRAND_LOGO_URL = "/pegasus-logo.jpg";
 
 type FetchTavFlightsFunctionResult = {
   success: boolean;
@@ -247,7 +248,7 @@ const isMgaFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "sour
 
 const getFlightLogo = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
   if (isPegasusFlight(flight)) {
-    return { src: PEGASUS_LOGO_URL, alt: "Pegasus", badgeClassName: "bg-[#ffcf2e]" };
+    return { src: SPECIAL_BRAND_LOGO_URL, alt: "Pegasus", badgeClassName: "bg-[#ffcf2e]" };
   }
 
   if (isMgaFlight(flight)) {
