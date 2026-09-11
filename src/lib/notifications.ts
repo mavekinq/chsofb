@@ -44,6 +44,57 @@ type ServiceAlertPayload = {
 
 export const SERVICE_ALERT_EVENT = "wheelchair-service-alert";
 const NOTIFICATION_PREFERENCES_STORAGE_KEY = "notificationPreferences";
+const SERVICE_NOTIFICATION_DEDUPE_WINDOW_MS = 15000;
+const recentServiceNotificationKeys = new Map<string, number>();
+
+export const isCounterClosedStatusText = (statusText?: string) => {
+  const normalized = String(statusText || "")
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/ı/g, "i")
+    .replace(/İ/g, "i");
+
+  if (!normalized) return false;
+
+  return normalized.includes("kontuar kapandi")
+    || normalized.includes("kontuar kapali")
+    || normalized.includes("kapi kapali")
+    || normalized.includes("kapandi")
+    || normalized.includes("kapali")
+    || normalized.includes("counter closed")
+    || normalized.includes("closed");
+};
+
+export const buildNotificationDedupKey = (service: Pick<ServicePushPayload, "flight_iata" | "wheelchair_id" | "passenger_type" | "assigned_staff" | "terminal" | "created_by" | "notes" | "notification_kind" | "dep_gate">) => {
+  const normalized = [
+    service.notification_kind || "generic",
+    service.flight_iata?.trim().toUpperCase() || "",
+    service.wheelchair_id?.trim().toUpperCase() || "",
+    service.passenger_type?.trim().toUpperCase() || "",
+    service.assigned_staff?.trim().toUpperCase() || "",
+    service.terminal?.trim().toUpperCase() || "",
+    service.dep_gate?.trim().toUpperCase() || "",
+    service.created_by?.trim().toUpperCase() || "",
+    (service.notes || "").trim().slice(0, 80),
+  ].join("|");
+
+  return normalized;
+};
+
+export const shouldSuppressDuplicateNotification = (service: Pick<ServicePushPayload, "flight_iata" | "wheelchair_id" | "passenger_type" | "assigned_staff" | "terminal" | "created_by" | "notes" | "notification_kind" | "dep_gate">, now = Date.now()) => {
+  const key = buildNotificationDedupKey(service);
+  const lastSeenAt = recentServiceNotificationKeys.get(key) ?? 0;
+
+  if (lastSeenAt && now - lastSeenAt < SERVICE_NOTIFICATION_DEDUPE_WINDOW_MS) {
+    return true;
+  }
+
+  recentServiceNotificationKeys.set(key, now);
+  return false;
+};
 
 export type NotificationPreferences = {
   serviceAlertsEnabled: boolean;
@@ -267,6 +318,23 @@ export const syncPushSubscriptionIfEnabled = async (userName: string) => {
 };
 
 export const triggerServicePushNotification = async (service: ServicePushPayload) => {
+  const now = Date.now();
+  const dedupeKey = buildNotificationDedupKey(service);
+  const lastSeenAt = recentServiceNotificationKeys.get(dedupeKey) ?? 0;
+
+  if (lastSeenAt && now - lastSeenAt < SERVICE_NOTIFICATION_DEDUPE_WINDOW_MS) {
+    return {
+      success: true,
+      total: 0,
+      eligible: 0,
+      suppressed: 1,
+      sent: 0,
+      failed: 0,
+    } as PushDeliveryResult;
+  }
+
+  recentServiceNotificationKeys.set(dedupeKey, now);
+
   const { data, error } = await supabase.functions.invoke("send-service-push", {
     body: service,
   });
@@ -302,6 +370,32 @@ export const showRealtimeServiceAlert = async (service: ServiceAlertPayload) => 
   }
 
   if (!isServiceAlertsEnabled()) {
+    return;
+  }
+
+  const dedupeKey = buildNotificationDedupKey({
+    flight_iata: service.flight_iata,
+    wheelchair_id: service.wheelchair_id,
+    passenger_type: service.passenger_type,
+    assigned_staff: service.assigned_staff || "",
+    terminal: service.terminal,
+    created_by: service.created_by,
+    notes: service.notes,
+    notification_kind: "service-created",
+    dep_gate: undefined,
+  });
+
+  if (shouldSuppressDuplicateNotification({
+    flight_iata: service.flight_iata,
+    wheelchair_id: service.wheelchair_id,
+    passenger_type: service.passenger_type,
+    assigned_staff: service.assigned_staff || "",
+    terminal: service.terminal,
+    created_by: service.created_by,
+    notes: service.notes,
+    notification_kind: "service-created",
+    dep_gate: undefined,
+  })) {
     return;
   }
 

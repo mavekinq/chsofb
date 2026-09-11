@@ -225,8 +225,6 @@ const isPegasusFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "
 
   return tokens.some((token) =>
     token === "PC"
-    || token === "QS"
-    || token === "3Z"
     || token === "PGT"
     || token.includes("PEGASUS")
   );
@@ -651,6 +649,7 @@ const WheelchairServicesPage = () => {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; flightIata: string } | null>(null);
   const [expandedServices, setExpandedServices] = useState<Set<string>>(new Set());
   const sentPreFlightAlertsRef = useRef<Set<string>>(new Set());
+  const sentCounterClosedAlertsRef = useRef<Set<string>>(new Set());
   const lastFlightGateSnapshotRef = useRef<Record<string, string>>({});
   const hasInitialFlightGateSnapshotRef = useRef(false);
   const servicesRef = useRef<WheelchairService[]>([]);
@@ -1047,6 +1046,72 @@ const WheelchairServicesPage = () => {
   };
 
   // ── Pre-flight alerts ──
+
+  useEffect(() => {
+    if (flights.length === 0 || services.length === 0) return;
+
+    const serviceKeys = services.map((service) => ({
+      service,
+      keys: new Set<string>(getFlightCodeMatchKeys(service.flight_iata || "")),
+    }));
+
+    flights.forEach((flight) => {
+      const statusText = String(flight.status || "").trim();
+      const isTavFlightSignal = Boolean(
+        String(flight.source_counter || "").trim()
+        || String(flight.source_airline || "").trim()
+        || String(flight.source_terminal || "").trim()
+        || String(flight.source_date || "").trim(),
+      );
+
+      if (!isTavFlightSignal || !isCounterClosedStatusText(statusText)) {
+        return;
+      }
+
+      const terminal = resolveFlightTerminal(flight);
+      const counter = normalizeGateValue(flight.source_counter) || getDisplayCounter(flight) || "-";
+      if (!terminal) return;
+
+      const flightKeys = new Set<string>([
+        ...getFlightCodeMatchKeys(flight.flight_iata || ""),
+        ...getFlightCodeMatchKeys(`${flight.airline_iata || ""}${flight.flight_number || ""}`),
+        ...getFlightCodeMatchKeys(flight.flight_number || ""),
+      ]);
+
+      const relatedServices = serviceKeys
+        .filter(({ service, keys }) => service.terminal === terminal && Array.from(keys).some((key) => flightKeys.has(key)))
+        .map(({ service }) => service);
+
+      if (relatedServices.length === 0) {
+        return;
+      }
+
+      const alertKey = `counter-closed|${terminal}|${flight.flight_iata}|${counter}|${statusText}`;
+      if (sentCounterClosedAlertsRef.current.has(alertKey)) return;
+
+      sentCounterClosedAlertsRef.current.add(alertKey);
+      void triggerServicePushNotification({
+        assigned_staff: "Sistem",
+        created_at: new Date().toISOString(),
+        created_by: currentUser,
+        flight_iata: flight.flight_iata,
+        notes: `Kontuar kapandı • ${statusText}`,
+        passenger_type: "BILDIRIM",
+        terminal,
+        wheelchair_id: `COUNTER-${flight.flight_iata}`,
+        dep_gate: getDisplayGate(flight),
+        notification_kind: "counter-close",
+        custom_title: `Kontuar Kapandı: ${flight.flight_iata}`,
+        custom_body: `${flight.flight_iata} için kontuar kapandı${counter !== "-" ? ` • Kontuar ${counter}` : ""}`,
+        custom_url: "/wheelchair-services",
+        custom_tag: `counter-close-${flight.flight_iata}-${terminal}-${counter}`,
+        on_shift_users: getOnShiftUserNames(),
+      }).catch((pushError) => {
+        sentCounterClosedAlertsRef.current.delete(alertKey);
+        console.error("Counter close push failed:", pushError);
+      });
+    });
+  }, [currentUser, flights, services]);
 
   useEffect(() => {
     if (flights.length === 0 || services.length === 0) return;
