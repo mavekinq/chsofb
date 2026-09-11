@@ -1,0 +1,17 @@
+<svg width="220" height="120" viewBox="0 0 220 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="KC logo">
+  <defs>
+    <linearGradient id="kcBg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0b3d91"/>
+      <stop offset="100%" stop-color="#103f9e"/>
+    </linearGradient>
+    <linearGradient id="kcAccent" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0%" stop-color="#f9d34f"/>
+      <stop offset="100%" stop-color="#f4b400"/>
+    </linearGradient>
+  </defs>
+  <rect width="220" height="120" rx="18" fill="url(#kcBg)"/>
+  <path d="M33 84 L58 36 L83 84 H68 L60 68 H47 L40 84 H33ZM54 58 L49 69 H61 L54 58Z" fill="url(#kcAccent)"/>
+  <path d="M97 84V36H110V73H131V84H97Z" fill="#ffffff" opacity="0.96"/>
+  <path d="M142 36H163C180 36 191 47 191 59C191 71 181 82 163 82H142V36ZM154 47V71H162C170 71 175 66 175 59C175 52 170 47 162 47H154Z" fill="#ffffff" opacity="0.96"/>
+  <circle cx="60" cy="28" r="8" fill="#f9d34f"/>
+</svg>

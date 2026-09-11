@@ -139,11 +139,14 @@ const OFFLINE_CACHE_KEYS = {
 
 const T1_ALLOWED_FLIGHT_PREFIXES = new Set(["PC"]);
 const T2_ALLOWED_FLIGHT_PREFIXES = new Set([
-  "PC", "4M", "3Z", "BY", "B2", "AH", "LX", "6D", "QS", "KC", "OR", "XY", "7O", "HY", "6B", "IA", "TOM", "A2", "6K", "J2", "SN", "KU", "TB",
+  "PC", "4M", "3Z", "BY", "B2", "AH", "6D", "QS", "KC", "OR", "XY", "7O", "HY", "6B", "IA", "TOM", "A2", "6K", "J2", "SN", "KU", "TB",
 ]);
 const PEGASUS_LOGO_URL = "/pegasus-logo.jpg";
 const MGA_LOGO_URL = "/mga-logo.svg";
-const SPECIAL_BRAND_LOGO_URL = "/pegasus-logo.jpg";
+const KC_LOGO_URL = "/kc-logo.svg";
+const SMARTWINGS_LOGO_URL = "/smartwings-logo.svg";
+const BY_TOM_TB_LOGO_URL = "/by.jpg";
+const PEGASUS_BRAND_CODES = new Set(["PC"]);
 
 type FetchTavFlightsFunctionResult = {
   success: boolean;
@@ -228,7 +231,7 @@ const getFlightBrandCode = (flight: Pick<Flight, "airline_iata" | "flight_iata">
 
 const isPegasusFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
   const brandCode = getFlightBrandCode(flight);
-  if (["PC", "PGT", "3Z", "7O", "QS", "KC"].includes(brandCode)) {
+  if (PEGASUS_BRAND_CODES.has(brandCode)) {
     return true;
   }
 
@@ -246,9 +249,36 @@ const isMgaFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "sour
   return !brandCode && (sourceAirline.includes("MGA") || sourceAirline.includes("MAVI") || sourceAirline.includes("GOK"));
 };
 
+const isKcFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
+  const brandCode = getFlightBrandCode(flight);
+  return brandCode === "KC";
+};
+
+const isSmartwingsFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
+  const brandCode = getFlightBrandCode(flight);
+  return ["3Z", "7O", "QS"].includes(brandCode);
+};
+
+const isByTomTbFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
+  const brandCode = getFlightBrandCode(flight);
+  return ["BY", "TOM", "TB"].includes(brandCode);
+};
+
 const getFlightLogo = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
   if (isPegasusFlight(flight)) {
-    return { src: SPECIAL_BRAND_LOGO_URL, alt: "Pegasus", badgeClassName: "bg-[#ffcf2e]" };
+    return { src: PEGASUS_LOGO_URL, alt: "Pegasus", badgeClassName: "bg-[#ffcf2e]" };
+  }
+
+  if (isKcFlight(flight)) {
+    return { src: KC_LOGO_URL, alt: "KC", badgeClassName: "bg-[#ffcf2e]" };
+  }
+
+  if (isByTomTbFlight(flight)) {
+    return { src: BY_TOM_TB_LOGO_URL, alt: "BY / TOM / TB", badgeClassName: "bg-[#f4f8ff] border border-[#dfeafc]" };
+  }
+
+  if (isSmartwingsFlight(flight)) {
+    return { src: SMARTWINGS_LOGO_URL, alt: "Smartwings", badgeClassName: "bg-[#f3f7ff] border border-[#d7e3ff]" };
   }
 
   if (isMgaFlight(flight)) {

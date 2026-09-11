@@ -1,0 +1,8 @@
+<svg width="220" height="120" viewBox="0 0 220 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Smartwings logo">
+  <rect width="220" height="120" rx="18" fill="#f3f7ff"/>
+  <path d="M24 70C48 52 71 42 95 38C113 35 129 37 143 44C157 50 170 61 182 72L188 78H26L24 70Z" fill="#1e58d8"/>
+  <path d="M47 48C56 47 66 43 75 35C82 28 87 20 90 11C95 16 99 22 104 27C111 35 119 41 129 45C122 51 114 57 106 62C96 69 89 76 84 84H50C51 77 52 71 54 65C56 60 58 55 61 50H47Z" fill="#f4b400"/>
+  <path d="M118 42C121 35 126 30 132 27C139 24 146 24 153 27C145 32 141 39 138 48C136 55 135 60 134 66H120C119 60 117 54 118 42Z" fill="#1e58d8"/>
+  <circle cx="169" cy="33" r="11" fill="#1e58d8"/>
+  <circle cx="170" cy="33" r="5" fill="#f4b400"/>
+</svg>
