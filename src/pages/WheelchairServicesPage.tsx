@@ -217,28 +217,32 @@ const isAllowedT1Flight = (rawFlightCode: string) =>
 const isAllowedT2Flight = (rawFlightCode: string) =>
   getFlightCodePrefixes(rawFlightCode).some((prefix) => T2_ALLOWED_FLIGHT_PREFIXES.has(prefix));
 
-const isPegasusFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
-  const tokens = [
-    ...getFlightCodePrefixes(flight.flight_iata || ""),
-    String(flight.airline_iata || "").trim().toUpperCase(),
-    String(flight.source_airline || "").trim().toUpperCase(),
-  ];
+const getFlightBrandCode = (flight: Pick<Flight, "airline_iata" | "flight_iata">) => {
+  const flightCode = normalizeFlightCode(String(flight.flight_iata || ""));
+  const airlineCode = normalizeFlightCode(String(flight.airline_iata || ""));
 
-  return tokens.some((token) =>
-    token === "PC"
-    || token === "PGT"
-    || token.includes("PEGASUS")
-  );
+  const directCode = airlineCode || extractAirlineCode(flightCode);
+  return directCode ? directCode.toUpperCase() : "";
+};
+
+const isPegasusFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
+  const brandCode = getFlightBrandCode(flight);
+  if (["PC", "PGT", "3Z", "7O", "QS"].includes(brandCode)) {
+    return true;
+  }
+
+  const sourceAirline = String(flight.source_airline || "").trim().toUpperCase();
+  return !brandCode && sourceAirline.includes("PEGASUS");
 };
 
 const isMgaFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
-  const tokens = [
-    ...getFlightCodePrefixes(flight.flight_iata || ""),
-    String(flight.airline_iata || "").trim().toUpperCase(),
-    String(flight.source_airline || "").trim().toUpperCase(),
-  ];
+  const brandCode = getFlightBrandCode(flight);
+  if (brandCode === "4M") {
+    return true;
+  }
 
-  return tokens.some((token) => token === "4M" || token.includes("MGA") || token.includes("MAVI") || token.includes("GOK"));
+  const sourceAirline = String(flight.source_airline || "").trim().toUpperCase();
+  return !brandCode && (sourceAirline.includes("MGA") || sourceAirline.includes("MAVI") || sourceAirline.includes("GOK"));
 };
 
 const getFlightLogo = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
@@ -1051,10 +1055,12 @@ const WheelchairServicesPage = () => {
   useEffect(() => {
     if (flights.length === 0 || services.length === 0) return;
 
-    const serviceKeys = services.map((service) => ({
-      service,
-      keys: new Set<string>(getFlightCodeMatchKeys(service.flight_iata || "")),
-    }));
+    const serviceKeys = services
+      .filter((service) => !isServiceCompleted(service))
+      .map((service) => ({
+        service,
+        keys: new Set<string>(getFlightCodeMatchKeys(service.flight_iata || "")),
+      }));
 
     flights.forEach((flight) => {
       const statusText = String(flight.status || "").trim();
@@ -1076,11 +1082,13 @@ const WheelchairServicesPage = () => {
       const flightKeys = new Set<string>([
         ...getFlightCodeMatchKeys(flight.flight_iata || ""),
         ...getFlightCodeMatchKeys(`${flight.airline_iata || ""}${flight.flight_number || ""}`),
-        ...getFlightCodeMatchKeys(flight.flight_number || ""),
       ]);
 
       const relatedServices = serviceKeys
-        .filter(({ service, keys }) => service.terminal === terminal && Array.from(keys).some((key) => flightKeys.has(key)))
+        .filter(({ service, keys }) => {
+          if (service.terminal !== terminal) return false;
+          return Array.from(keys).some((key) => flightKeys.has(key));
+        })
         .map(({ service }) => service);
 
       if (relatedServices.length === 0) {
@@ -1117,10 +1125,12 @@ const WheelchairServicesPage = () => {
   useEffect(() => {
     if (flights.length === 0 || services.length === 0) return;
     const nowSeconds = getIstanbulNowSeconds();
-    const serviceKeys = services.map((service) => ({
-      service,
-      keys: new Set<string>(getFlightCodeMatchKeys(service.flight_iata || "")),
-    }));
+    const serviceKeys = services
+      .filter((service) => !isServiceCompleted(service))
+      .map((service) => ({
+        service,
+        keys: new Set<string>(getFlightCodeMatchKeys(service.flight_iata || "")),
+      }));
 
     flights.forEach((flight) => {
       const depTime = getFlightDepartureTimestamp(flight);
@@ -1135,11 +1145,13 @@ const WheelchairServicesPage = () => {
       const flightKeys = new Set<string>([
         ...getFlightCodeMatchKeys(flight.flight_iata || ""),
         ...getFlightCodeMatchKeys(`${flight.airline_iata || ""}${flight.flight_number || ""}`),
-        ...getFlightCodeMatchKeys(flight.flight_number || ""),
       ]);
 
       const relatedServices = serviceKeys
-        .filter(({ service, keys }) => service.terminal === terminal && Array.from(keys).some((key) => flightKeys.has(key)))
+        .filter(({ service, keys }) => {
+          if (service.terminal !== terminal) return false;
+          return Array.from(keys).some((key) => flightKeys.has(key));
+        })
         .map(({ service }) => service);
 
       if (relatedServices.length === 0) return;
