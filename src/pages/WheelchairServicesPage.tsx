@@ -34,7 +34,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { createFlightPlanPositionLookup, fetchFlightPlanEntriesMerged, fetchFlightPlanEntriesMergedWithWindow, getFlightCodeMatchKeys, getIstanbulDateKey, normalizeFlightCode } from "@/lib/flight-plan";
-import { triggerServicePushNotification } from "@/lib/notifications";
+import { isCounterClosedStatusText, triggerServicePushNotification } from "@/lib/notifications";
 import { readOfflineCache, saveOfflineCache } from "@/lib/offline-cache";
 import { getOnShiftOFBCount, getOnShiftUserNames } from "@/lib/work-schedule";
 import { triggerGoogleSheetsSync } from "@/lib/google-sheets-sync";
@@ -73,6 +73,7 @@ interface Flight {
   source_city?: string;
   source_counter?: string;
   source_terminal?: string;
+  specialNotes?: string;
 }
 
 interface WheelchairService {
@@ -301,7 +302,7 @@ const parseDomesticFlightsFromHtml = (html: string) => {
         source_city: row.querySelector("td.from span")?.textContent?.trim() || undefined,
         source_counter: gateOrCounter || undefined,
         source_terminal: row.querySelector("td.terminal span")?.textContent?.trim() || undefined,
-      } satisfies Flight;
+      } as Flight;
     })
     .filter((flight): flight is Flight => Boolean(flight && flight.flight_iata));
 };
@@ -355,7 +356,7 @@ const parseInternationalFlightsFromHtml = (html: string) => {
         source_city: row.querySelector("td.from span")?.textContent?.trim() || undefined,
         source_counter: gateOrCounter || undefined,
         source_terminal: row.querySelector("td.terminal span")?.textContent?.trim() || undefined,
-      } satisfies Flight;
+      } as Flight;
     })
     .filter((flight): flight is Flight => Boolean(flight && flight.flight_iata));
 };
@@ -1160,6 +1161,8 @@ const WheelchairServicesPage = () => {
       const gateInfo = gate !== "-" ? ` • Gate: ${gate}` : "";
       const detail = `Toplam WCH: ${relatedServices.length} • ${passengerSummary}${noteSummary}${gateInfo}`;
 
+      flight.specialNotes = flight.specialNotes || "";
+
       sentPreFlightAlertsRef.current.add(alertKey);
       void triggerServicePushNotification({
         assigned_staff: "Sistem",
@@ -1228,7 +1231,7 @@ const WheelchairServicesPage = () => {
     const cachedFlights = readOfflineCache<{ flights: Flight[] }>(OFFLINE_CACHE_KEYS.flights);
     if (cachedFlights?.flights && cachedFlights.flights.length > 0) {
       setFlights(cachedFlights.flights);
-      setLastUpdated(new Date(cachedFlights.savedAt || Date.now()));
+      setLastUpdated(new Date((cachedFlights as { flights: Flight[]; savedAt?: string }).savedAt || Date.now()));
       setLoading(false);
     }
 
