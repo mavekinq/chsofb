@@ -228,7 +228,7 @@ const getFlightBrandCode = (flight: Pick<Flight, "airline_iata" | "flight_iata">
 
 const isPegasusFlight = (flight: Pick<Flight, "airline_iata" | "flight_iata" | "source_airline">) => {
   const brandCode = getFlightBrandCode(flight);
-  if (["PC", "PGT", "3Z", "7O", "QS"].includes(brandCode)) {
+  if (["PC", "PGT", "3Z", "7O", "QS", "KC"].includes(brandCode)) {
     return true;
   }
 
