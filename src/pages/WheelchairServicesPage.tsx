@@ -144,7 +144,7 @@ const T2_ALLOWED_FLIGHT_PREFIXES = new Set([
 const PEGASUS_LOGO_URL = "/pegasus-logo.jpg";
 const MGA_LOGO_URL = "/mga-logo.svg";
 const KC_LOGO_URL = "/kc-logo.svg";
-const SMARTWINGS_LOGO_URL = "/smartwings-logo.svg";
+const SMARTWINGS_LOGO_URL = "/qs.jpg";
 const BY_TOM_TB_LOGO_URL = "/by.jpg";
 const PEGASUS_BRAND_CODES = new Set(["PC"]);
 
