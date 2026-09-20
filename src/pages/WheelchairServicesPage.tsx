@@ -198,11 +198,13 @@ const parseAirportFlightCode = (rawValue: string) => {
   }
 
   const primary = match[1] || "";
+  const secondary = match[2];
   const number = match[3] || "";
-  const flightIata = normalizeFlightCode(`${primary}${number}`).replace(/[^A-Z0-9]/g, "");
+  const canonicalAirline = secondary || primary;
+  const flightIata = normalizeFlightCode(`${canonicalAirline}${number}`).replace(/[^A-Z0-9]/g, "");
 
   return {
-    airlineIata: primary,
+    airlineIata: canonicalAirline,
     flightIata,
     flightNumber: number,
   };
