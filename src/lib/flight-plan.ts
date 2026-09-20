@@ -26,6 +26,8 @@ const SHEET_URL =
 const FLIGHT_CODE_ALIASES: Record<string, string[]> = {
   PC: ["PGT"],
   PGT: ["PC"],
+  "4M": ["TOM"],
+  TOM: ["4M"],
   TK: ["THY"],
   THY: ["TK"],
   XQ: ["SXS"],
@@ -98,9 +100,11 @@ export const getFlightCodeMatchKeys = (value: string) => {
 
   const keys = new Set<string>([normalized]);
 
-  const prefixMatch = normalized.match(/^[A-Z]+/);
-  const prefix = prefixMatch?.[0] || "";
-  const numberPart = normalized.slice(prefix.length);
+  // Airline codes may start with a digit (for example 4M769). Split at
+  // the final numeric flight number while keeping the complete airline code.
+  const prefixMatch = normalized.match(/^([A-Z0-9]*[A-Z])(\d+)$/);
+  const prefix = prefixMatch?.[1] || "";
+  const numberPart = prefixMatch?.[2] || normalized;
 
   if (numberPart) {
     keys.add(numberPart);
@@ -374,4 +378,3 @@ export const fetchFlightPlanEntriesMerged = async (): Promise<FlightPlanEntry[]>
   const result = await fetchFlightPlanEntriesMergedWithWindow();
   return result.entries;
 };
-
