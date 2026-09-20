@@ -204,7 +204,9 @@ const parseAirportFlightCode = (rawValue: string) => {
   const flightIata = normalizeFlightCode(`${canonicalAirline}${number}`).replace(/[^A-Z0-9]/g, "");
 
   return {
-    airlineIata: canonicalAirline,
+    // Keep the primary carrier code for branding; use the secondary code
+    // only for the canonical flight key used by flight-plan matching.
+    airlineIata: primary,
     flightIata,
     flightNumber: number,
   };
