@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, ClipboardCheck, Loader2, MapPin, Plane, ScanLine, Upload, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { createWorker, PSM } from "tesseract.js";
+import { BrowserMultiFormatReader } from "@zxing/browser";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -100,6 +102,24 @@ const prepareTicketImage = (file: File): Promise<HTMLCanvasElement> =>
     image.src = objectUrl;
   });
 
+const readTicketBarcode = (image: HTMLCanvasElement) => {
+  const hints = new Map<DecodeHintType, unknown>();
+  hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+    BarcodeFormat.PDF_417,
+    BarcodeFormat.AZTEC,
+    BarcodeFormat.DATA_MATRIX,
+  ]);
+  hints.set(DecodeHintType.TRY_HARDER, true);
+
+  try {
+    const reader = new BrowserMultiFormatReader(hints);
+    const result = reader.decodeFromCanvas(image);
+    return `${result.getBarcodeFormat()}: ${result.getText()}`;
+  } catch {
+    return "";
+  }
+};
+
 const TeslimPage = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -161,6 +181,7 @@ const TeslimPage = () => {
       if (file.type.startsWith("image/")) {
         toast.info("Bilet okunuyor; ilk kullanımda OCR dili indirilebilir.");
         const preparedImage = await prepareTicketImage(file);
+        const barcodeText = readTicketBarcode(preparedImage);
         const worker = await createWorker("tur+eng");
         try {
           await worker.setParameters({
@@ -169,8 +190,13 @@ const TeslimPage = () => {
             user_defined_dpi: "300",
           });
           const result = await worker.recognize(preparedImage, { rotateAuto: true });
-          applyTicketData(result.data.text);
-          toast.success("Görsel bilet okundu. Bilgileri kontrol edip uçuşu eşleştirin.");
+          const extractedText = [barcodeText, result.data.text].filter(Boolean).join("\n");
+          applyTicketData(extractedText);
+          toast.success(
+            barcodeText
+              ? "Bilet metni ve 2D kodu okundu. Bilgileri kontrol edip uçuşu eşleştirin."
+              : "Görsel bilet okundu. Bilgileri kontrol edip uçuşu eşleştirin.",
+          );
         } finally {
           await worker.terminate();
         }
