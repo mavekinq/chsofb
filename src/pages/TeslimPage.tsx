@@ -290,22 +290,6 @@ const TeslimPage = () => {
     }
   };
 
-  const captureCameraImage = async () => {
-    const video = videoRef.current;
-    if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-      toast.error("Kamera görüntüsü henüz hazır değil.");
-      return;
-    }
-
-    const file = await createCameraFile();
-    if (!file) {
-      toast.error("Kamera görüntüsü işlenemedi.");
-      return;
-    }
-    stopCamera();
-    void handleFile(file);
-  };
-
   const saveRecords = (nextRecords: DeliveryRecord[]) => {
     setRecords(nextRecords);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextRecords));
@@ -407,6 +391,11 @@ const TeslimPage = () => {
     saveRecords(records.map((record) => record.id === recordId ? { ...record, stage, updatedAt: now, updatedBy: currentUser } : record));
   };
 
+  const completeBoarding = (recordId: string) => {
+    saveRecords(records.filter((record) => record.id !== recordId));
+    toast.success("Boarding tamamlandı; teslim kaydı listeden kaldırıldı.");
+  };
+
   const activeRecords = useMemo(() => records.slice(0, 12), [records]);
 
   if (!currentUser) return null;
@@ -441,8 +430,7 @@ const TeslimPage = () => {
                     <video ref={videoRef} className="aspect-video w-full object-contain" autoPlay playsInline muted />
                     <div className="pointer-events-none absolute inset-4 rounded-lg border-2 border-dashed border-white/70" />
                   </div>
-                  <div className="flex gap-2">
-                    <Button className="flex-1" onClick={() => void captureCameraImage()}><Camera />Fotoğraf çek ve oku</Button>
+                  <div className="flex justify-end">
                     <Button variant="outline" onClick={stopCamera}><X />Kapat</Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -498,6 +486,11 @@ const TeslimPage = () => {
                     </Button>
                   ))}
                 </div>
+                {record.stage === "boarding" && (
+                  <Button className="mt-2 w-full" size="sm" onClick={() => completeBoarding(record.id)}>
+                    <Check className="h-3 w-3" />Boarding tamamlandı
+                  </Button>
+                )}
                 <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground"><UserRound className="h-3 w-3" />Son güncelleme: {record.updatedBy}</p>
               </div>
             ))}
