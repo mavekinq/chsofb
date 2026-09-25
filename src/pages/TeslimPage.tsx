@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Camera, Check, ClipboardCheck, Loader2, MapPin, Plane, ScanLine, Upload, UserRound, X } from "lucide-react";
+import { ArrowLeft, Camera, Check, ClipboardCheck, Loader2, MapPin, Plane, ScanLine, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { createWorker, PSM } from "tesseract.js";
 import { BrowserMultiFormatReader } from "@zxing/browser";
@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { fetchFlightPlanEntriesMerged, getFlightCodeMatchKeys, normalizeFlightCode, type FlightPlanEntry } from "@/lib/flight-plan";
 import { hasTeslimAccess } from "@/lib/teslim-access";
@@ -142,11 +141,9 @@ const readTicketBarcode = (images: HTMLCanvasElement[]) => {
 
 const TeslimPage = () => {
   const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const [currentUser, setCurrentUser] = useState("");
-  const [ticketText, setTicketText] = useState("");
   const [passengerName, setPassengerName] = useState("");
   const [flightCode, setFlightCode] = useState("");
   const [pnr, setPnr] = useState("");
@@ -156,7 +153,6 @@ const TeslimPage = () => {
   const [matchedFlight, setMatchedFlight] = useState<FlightPlanEntry | null>(null);
   const [flights, setFlights] = useState<FlightPlanEntry[]>([]);
   const [records, setRecords] = useState<DeliveryRecord[]>(readRecords);
-  const [loading, setLoading] = useState(false);
   const [readingFile, setReadingFile] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraStarting, setCameraStarting] = useState(false);
@@ -316,7 +312,6 @@ const TeslimPage = () => {
   };
 
   const applyTicketData = (text: string) => {
-    setTicketText(text);
     const parsed = parseTicket(text);
     setPassengerName(parsed.passengerName);
     setFlightCode(parsed.flightCode);
@@ -325,11 +320,13 @@ const TeslimPage = () => {
     setDestination(parsed.destination);
     if (parsed.flightCode) {
       const keys = new Set(getFlightCodeMatchKeys(parsed.flightCode));
-      setMatchedFlight(
-        flights.find((flight) => [flight.arrivalCode, flight.departureCode].some((code) =>
-          getFlightCodeMatchKeys(code).some((key) => keys.has(key)),
-        )) || null,
-      );
+      const match = flights.find((flight) => [flight.arrivalCode, flight.departureCode].some((code) =>
+        getFlightCodeMatchKeys(code).some((key) => keys.has(key)),
+      )) || null;
+      setMatchedFlight(match);
+      if (match) {
+        toast.success(`${normalizeFlightCode(parsed.flightCode)} uçuşu otomatik eşleştirildi.`);
+      }
     }
   };
 
@@ -375,32 +372,6 @@ const TeslimPage = () => {
     }
   };
 
-  const handleMatch = async () => {
-    setLoading(true);
-    try {
-      const latestFlights = flights.length > 0 ? flights : await fetchFlightPlanEntriesMerged();
-      setFlights(latestFlights);
-      const keys = new Set(getFlightCodeMatchKeys(flightCode));
-      const match = latestFlights.find((flight) =>
-        [flight.arrivalCode, flight.departureCode].some((code) =>
-          getFlightCodeMatchKeys(code).some((key) => keys.has(key)),
-        ),
-      ) || null;
-      setMatchedFlight(match);
-      if (match) {
-        setDestination(destination || match.departureIATA || match.arrivalIATA);
-        toast.success(`${normalizeFlightCode(flightCode)} uçuşu eşleştirildi.`);
-      } else {
-        toast.warning("Uçuş planında eşleşen kayıt bulunamadı.");
-      }
-    } catch (error) {
-      console.error("Teslim flight matching failed:", error);
-      toast.error("Uçuş eşleştirme başarısız.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const createRecord = () => {
     if (!passengerName.trim() || !flightCode.trim() || !matchedFlight) {
       toast.error("Yolcu adı, uçuş kodu ve eşleşen uçuş gerekli.");
@@ -427,7 +398,6 @@ const TeslimPage = () => {
     setPnr("");
     setSeat("");
     setDestination("");
-    setTicketText("");
     setMatchedFlight(null);
     toast.success("Teslim kaydı oluşturuldu.");
   };
@@ -458,22 +428,13 @@ const TeslimPage = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><ScanLine className="h-5 w-5 text-primary" />Bilet bilgilerini al</CardTitle>
-            <CardDescription>Bilet metnini yapıştırın, kamerayla çekin veya dosya yükleyin. Alanlar otomatik doldurulur.</CardDescription>
+            <CardDescription>Biniş kartını kameraya gösterin; kod tam algılandığında bilgiler otomatik doldurulur ve uçuş eşleştirilir.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Textarea value={ticketText} onChange={(event) => applyTicketData(event.target.value)} placeholder={"Örnek:\nPassenger: AYŞE YILMAZ\nFlight: PC1234\nPNR: ABC123\nSeat: 12A"} className="min-h-32" />
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={readingFile}>
-                {readingFile ? <Loader2 className="animate-spin" /> : <Upload />} Dosyadan oku
-              </Button>
               <Button variant="outline" onClick={() => void startCamera()} disabled={readingFile || cameraStarting}>
                 {cameraStarting ? <Loader2 className="animate-spin" /> : <Camera />} Kamerayla çek
               </Button>
-              <input ref={fileInputRef} type="file" accept=".txt,.csv,.pdf,image/*" className="hidden" onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void handleFile(file);
-                event.currentTarget.value = "";
-              }} />
               {cameraOpen && (
                 <div className="basis-full space-y-3 rounded-xl border border-primary/30 bg-background/60 p-3">
                   <div className="relative overflow-hidden rounded-lg bg-black">
@@ -491,7 +452,6 @@ const TeslimPage = () => {
                   </p>
                 </div>
               )}
-              <Button onClick={() => void handleMatch()} disabled={loading || !flightCode.trim()}>{loading ? <Loader2 className="animate-spin" /> : <Plane />} Uçuşu eşleştir</Button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div><Label>Yolcu adı</Label><Input value={passengerName} onChange={(event) => setPassengerName(event.target.value)} /></div>
