@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, ClipboardCheck, FileText, Loader2, MapPin, Plane, ScanLine, Upload, UserRound } from "lucide-react";
+import { ArrowLeft, Check, ClipboardCheck, Loader2, MapPin, Plane, ScanLine, Upload, UserRound } from "lucide-react";
 import { toast } from "sonner";
+import { createWorker } from "tesseract.js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -42,8 +43,6 @@ const readRecords = (): DeliveryRecord[] => {
     return [];
   }
 };
-
-const normalizeText = (value: string) => value.toLocaleLowerCase("tr").replace(/[^\p{L}\p{N}]/gu, "");
 
 const extractValue = (text: string, labels: string[]) => {
   const labelPattern = labels.join("|");
@@ -122,7 +121,19 @@ const TeslimPage = () => {
     setReadingFile(true);
     try {
       if (file.type.startsWith("image/")) {
-        toast.error("Görsel bilet OCR için sunucu kurulumu gerekiyor. Bilet metnini yapıştırabilirsiniz.");
+        toast.info("Bilet okunuyor; ilk kullanımda OCR dili indirilebilir.");
+        const worker = await createWorker("tur+eng");
+        try {
+          const result = await worker.recognize(file);
+          applyTicketData(result.data.text);
+          toast.success("Görsel bilet okundu. Bilgileri kontrol edip uçuşu eşleştirin.");
+        } finally {
+          await worker.terminate();
+        }
+        return;
+      }
+      if (!file.type.includes("text") && !/\.(txt|csv)$/i.test(file.name)) {
+        toast.error("Şimdilik görsel, TXT veya CSV bilet yükleyebilirsiniz.");
         return;
       }
       applyTicketData(await file.text());
