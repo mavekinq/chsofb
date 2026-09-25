@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { fetchFlightPlanEntriesMerged, getFlightCodeMatchKeys, normalizeFlightCode, type FlightPlanEntry } from "@/lib/flight-plan";
 import { hasTeslimAccess } from "@/lib/teslim-access";
+import { isBcbpData, parseBCBP } from "@/lib/bcbp";
 
 type DeliveryStage = "ready" | "gate" | "boarding";
 type DeliveryRecord = {
@@ -53,6 +54,17 @@ const extractValue = (text: string, labels: string[]) => {
 };
 
 const parseTicket = (rawText: string) => {
+  const bcbp = parseBCBP(rawText);
+  if (isBcbpData(bcbp)) {
+    return {
+      passengerName: bcbp.passengerName || "",
+      flightCode: `${bcbp.airline || ""}${bcbp.flightNumber || ""}`,
+      pnr: bcbp.pnr || "",
+      seat: bcbp.seat || "",
+      destination: bcbp.destination || "",
+    };
+  }
+
   const flightMatch = rawText.toUpperCase().match(/\b(?:[A-Z]{2}|[A-Z]\d|\d[A-Z])\s?\d{2,4}\b/);
   const pnrMatch = rawText.toUpperCase().match(/\b(?:PNR|BOOKING|RESERVATION)\s*[:#-]?\s*([A-Z0-9]{5,8})\b/);
   return {
@@ -114,7 +126,7 @@ const readTicketBarcode = (image: HTMLCanvasElement) => {
   try {
     const reader = new BrowserMultiFormatReader(hints);
     const result = reader.decodeFromCanvas(image);
-    return `${result.getBarcodeFormat()}: ${result.getText()}`;
+    return result.getText();
   } catch {
     return "";
   }
