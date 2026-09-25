@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { Accessibility, ArrowRight, Bell, Briefcase, CalendarDays, ExternalLink, LogOut, Megaphone, Newspaper, Phone, Plane, RefreshCw, Settings, Shield, Star, Users } from "lucide-react";
+import { Accessibility, ArrowRight, Bell, Briefcase, CalendarDays, ClipboardCheck, ExternalLink, LogOut, Megaphone, Newspaper, Phone, Plane, RefreshCw, Settings, Shield, Star, Users } from "lucide-react";
 import SplashScreen from "@/components/SplashScreen";
 import { BRIEFINGS_UPDATED_EVENT, getBriefings, loadBriefings } from "@/lib/briefings";
 import { CELEBI_NEWS_SOURCE_URL, type CelebiNewsItem, fetchCelebiNews } from "@/lib/celebi-news";
@@ -12,6 +12,7 @@ import { readOfflineCache, saveOfflineCache } from "@/lib/offline-cache";
 import { ensurePushSubscription, getNotificationPermissionState, isNotificationSupported, requiresInstalledPwaForPush, syncPushSubscriptionIfEnabled } from "@/lib/notifications";
 import { getStoredSchedulePayload, loadSchedulePayload, type SchedulePayload, WORK_SCHEDULE_UPDATED_EVENT } from "@/lib/work-schedule";
 import { hasSpecialMemberAccess } from "@/lib/special-member";
+import { hasTeslimAccess } from "@/lib/teslim-access";
 import { toast } from "sonner";
 
 type DashboardSummary = {
@@ -88,6 +89,7 @@ const MainMenu = () => {
   const [now, setNow] = useState(new Date());
   const [schedulePayload, setSchedulePayload] = useState<SchedulePayload>(() => getStoredSchedulePayload());
   const [hasSpecialAccess, setHasSpecialAccess] = useState(false);
+  const [hasTeslimUserAccess, setHasTeslimUserAccess] = useState(false);
 
   const nowLabel = useMemo(
     () => now.toLocaleString("tr-TR", {
@@ -134,6 +136,7 @@ const MainMenu = () => {
     setCurrentUser(user);
     setIsAdminUser(role === "admin");
     setHasSpecialAccess(hasSpecialMemberAccess(securityNumber));
+    setHasTeslimUserAccess(hasTeslimAccess(securityNumber, role));
   }, [navigate]);
 
   useEffect(() => {
@@ -417,6 +420,12 @@ const MainMenu = () => {
                       <Button variant="outline" className="gap-2 border-amber-500/40 text-amber-300 hover:bg-amber-500/10" onClick={() => navigate("/chef-daily") }>
                         <Star className="h-4 w-4" />
                         Chef-Daily
+                      </Button>
+                    )}
+                    {hasTeslimUserAccess && (
+                      <Button variant="outline" className="gap-2 border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10" onClick={() => navigate("/teslim")}>
+                        <ClipboardCheck className="h-4 w-4" />
+                        Teslim Operasyonu
                       </Button>
                     )}
                   </div>
