@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, ClipboardCheck, Loader2, MapPin, Plane, ScanLine, Upload, UserRound } from "lucide-react";
 import { toast } from "sonner";
-import { createWorker } from "tesseract.js";
+import { createWorker, PSM } from "tesseract.js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -61,6 +61,44 @@ const parseTicket = (rawText: string) => {
     destination: extractValue(rawText, ["destination", "varış", "arrival"]),
   };
 };
+
+const prepareTicketImage = (file: File): Promise<HTMLCanvasElement> =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const scale = Math.min(2.5, Math.max(1, 1800 / Math.max(image.naturalWidth, image.naturalHeight)));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.naturalWidth * scale);
+      canvas.height = Math.round(image.naturalHeight * scale);
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) {
+        reject(new Error("Görsel işleme alanı oluşturulamadı"));
+        return;
+      }
+
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      for (let index = 0; index < imageData.data.length; index += 4) {
+        const luminance =
+          imageData.data[index] * 0.299 +
+          imageData.data[index + 1] * 0.587 +
+          imageData.data[index + 2] * 0.114;
+        const contrast = Math.max(0, Math.min(255, (luminance - 128) * 1.35 + 128));
+        imageData.data[index] = contrast;
+        imageData.data[index + 1] = contrast;
+        imageData.data[index + 2] = contrast;
+      }
+      context.putImageData(imageData, 0, 0);
+      resolve(canvas);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Görsel yüklenemedi"));
+    };
+    image.src = objectUrl;
+  });
 
 const TeslimPage = () => {
   const navigate = useNavigate();
@@ -122,9 +160,15 @@ const TeslimPage = () => {
     try {
       if (file.type.startsWith("image/")) {
         toast.info("Bilet okunuyor; ilk kullanımda OCR dili indirilebilir.");
+        const preparedImage = await prepareTicketImage(file);
         const worker = await createWorker("tur+eng");
         try {
-          const result = await worker.recognize(file);
+          await worker.setParameters({
+            tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+            preserve_interword_spaces: "1",
+            user_defined_dpi: "300",
+          });
+          const result = await worker.recognize(preparedImage, { rotateAuto: true });
           applyTicketData(result.data.text);
           toast.success("Görsel bilet okundu. Bilgileri kontrol edip uçuşu eşleştirin.");
         } finally {
