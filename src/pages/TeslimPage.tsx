@@ -160,6 +160,9 @@ const TeslimPage = () => {
   const [readingFile, setReadingFile] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraStarting, setCameraStarting] = useState(false);
+  const [cameraScanning, setCameraScanning] = useState(false);
+  const cameraScanTimerRef = useRef<number | null>(null);
+  const cameraScanBusyRef = useRef(false);
 
   useEffect(() => {
     const role = localStorage.getItem("userRole");
@@ -177,6 +180,9 @@ const TeslimPage = () => {
   }, [navigate]);
 
   useEffect(() => () => {
+    if (cameraScanTimerRef.current !== null) {
+      window.clearInterval(cameraScanTimerRef.current);
+    }
     cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
   }, []);
 
@@ -189,7 +195,74 @@ const TeslimPage = () => {
     void videoRef.current.play();
   }, [cameraOpen]);
 
+  const createCameraFile = () => {
+    const video = videoRef.current;
+    if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth) {
+      return null;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return null;
+    }
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return new Promise<File | null>((resolve) => {
+      canvas.toBlob((blob) => {
+        resolve(blob ? new File([blob], `ticket-${Date.now()}.jpg`, { type: "image/jpeg" }) : null);
+      }, "image/jpeg", 0.95);
+    });
+  };
+
+  const stopCameraScanning = () => {
+    if (cameraScanTimerRef.current !== null) {
+      window.clearInterval(cameraScanTimerRef.current);
+      cameraScanTimerRef.current = null;
+    }
+    setCameraScanning(false);
+  };
+
+  const startCameraScanning = () => {
+    stopCameraScanning();
+    setCameraScanning(true);
+    cameraScanTimerRef.current = window.setInterval(async () => {
+      if (cameraScanBusyRef.current || !videoRef.current) {
+        return;
+      }
+
+      cameraScanBusyRef.current = true;
+      try {
+        const video = videoRef.current;
+        if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0) {
+          const canvas = document.createElement("canvas");
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const context = canvas.getContext("2d");
+          if (context) {
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const barcodeText = readTicketBarcode([canvas]);
+            if (barcodeText && isBcbpData(parseBCBP(barcodeText))) {
+              const file = await createCameraFile();
+              if (file) {
+                stopCameraScanning();
+                stopCamera();
+                toast.success("Boarding kartı algılandı; otomatik okunuyor.");
+                await handleFile(file);
+              }
+            }
+          }
+        }
+      } finally {
+        cameraScanBusyRef.current = false;
+      }
+    }, 450);
+  };
+
   const stopCamera = () => {
+    stopCameraScanning();
     cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
     cameraStreamRef.current = null;
     if (videoRef.current) {
@@ -212,6 +285,7 @@ const TeslimPage = () => {
       });
       cameraStreamRef.current = stream;
       setCameraOpen(true);
+      startCameraScanning();
     } catch (error) {
       console.error("Camera access failed:", error);
       toast.error("Kamera açılamadı. Tarayıcı kamera iznini kontrol edin.");
@@ -227,24 +301,13 @@ const TeslimPage = () => {
       return;
     }
 
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const context = canvas.getContext("2d");
-    if (!context) {
+    const file = await createCameraFile();
+    if (!file) {
       toast.error("Kamera görüntüsü işlenemedi.");
       return;
     }
-
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        toast.error("Bilet fotoğrafı oluşturulamadı.");
-        return;
-      }
-      stopCamera();
-      void handleFile(new File([blob], `ticket-${Date.now()}.jpg`, { type: "image/jpeg" }));
-    }, "image/jpeg", 0.95);
+    stopCamera();
+    void handleFile(file);
   };
 
   const saveRecords = (nextRecords: DeliveryRecord[]) => {
@@ -421,7 +484,11 @@ const TeslimPage = () => {
                     <Button className="flex-1" onClick={() => void captureCameraImage()}><Camera />Fotoğraf çek ve oku</Button>
                     <Button variant="outline" onClick={stopCamera}><X />Kapat</Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">Bileti çerçeve içine alıp yazılar ve 2D kod net görünecek şekilde çekin.</p>
+                  <p className="text-xs text-muted-foreground">
+                    {cameraScanning
+                      ? "Kart aranıyor. PDF417/Aztec/Data Matrix kodu tam göründüğünde otomatik çekilecek."
+                      : "Bileti çerçeve içine alıp yazılar ve 2D kod net görünecek şekilde çekin."}
+                  </p>
                 </div>
               )}
               <Button onClick={() => void handleMatch()} disabled={loading || !flightCode.trim()}>{loading ? <Loader2 className="animate-spin" /> : <Plane />} Uçuşu eşleştir</Button>
