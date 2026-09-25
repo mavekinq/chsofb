@@ -74,7 +74,18 @@ const parseOptionalData = (value: string) => {
 
 export const parseBCBP = (rawValue: string): BcbpData => {
   const raw = String(rawValue || "");
-  const value = raw.replace(/^(?:PDF_417|AZTEC|DATA_MATRIX)\s*:\s*/i, "").replace(/[\r\n]/g, "");
+  const printable = Array.from(raw)
+    .filter((character) => {
+      const code = character.charCodeAt(0);
+      return code >= 32 && code !== 127;
+    })
+    .join("");
+  const prefixRemoved = printable.replace(/^(?:PDF_417|AZTEC|DATA_MATRIX)\s*:\s*/i, "");
+  const candidate = prefixRemoved
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => /^[A-Z]\d/i.test(line)) || prefixRemoved;
+  const value = candidate.toUpperCase();
 
   if (value.length < 60 || !/^[A-Z]\d/.test(value)) {
     return { ...EMPTY_BCBP, rawValue: raw };

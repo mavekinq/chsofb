@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, ClipboardCheck, Loader2, MapPin, Plane, ScanLine, Upload, UserRound } from "lucide-react";
+import { ArrowLeft, Camera, Check, ClipboardCheck, Loader2, MapPin, Plane, ScanLine, Upload, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { createWorker, PSM } from "tesseract.js";
 import { BrowserMultiFormatReader } from "@zxing/browser";
@@ -76,7 +76,7 @@ const parseTicket = (rawText: string) => {
   };
 };
 
-const prepareTicketImage = (file: File): Promise<HTMLCanvasElement> =>
+const prepareTicketImage = (file: File, enhance = true): Promise<HTMLCanvasElement> =>
   new Promise((resolve, reject) => {
     const image = new Image();
     const objectUrl = URL.createObjectURL(file);
@@ -93,18 +93,20 @@ const prepareTicketImage = (file: File): Promise<HTMLCanvasElement> =>
       }
 
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-      for (let index = 0; index < imageData.data.length; index += 4) {
-        const luminance =
-          imageData.data[index] * 0.299 +
-          imageData.data[index + 1] * 0.587 +
-          imageData.data[index + 2] * 0.114;
-        const contrast = Math.max(0, Math.min(255, (luminance - 128) * 1.35 + 128));
-        imageData.data[index] = contrast;
-        imageData.data[index + 1] = contrast;
-        imageData.data[index + 2] = contrast;
+      if (enhance) {
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        for (let index = 0; index < imageData.data.length; index += 4) {
+          const luminance =
+            imageData.data[index] * 0.299 +
+            imageData.data[index + 1] * 0.587 +
+            imageData.data[index + 2] * 0.114;
+          const contrast = Math.max(0, Math.min(255, (luminance - 128) * 1.35 + 128));
+          imageData.data[index] = contrast;
+          imageData.data[index + 1] = contrast;
+          imageData.data[index + 2] = contrast;
+        }
+        context.putImageData(imageData, 0, 0);
       }
-      context.putImageData(imageData, 0, 0);
       resolve(canvas);
     };
     image.onerror = () => {
@@ -114,7 +116,7 @@ const prepareTicketImage = (file: File): Promise<HTMLCanvasElement> =>
     image.src = objectUrl;
   });
 
-const readTicketBarcode = (image: HTMLCanvasElement) => {
+const readTicketBarcode = (images: HTMLCanvasElement[]) => {
   const hints = new Map<DecodeHintType, unknown>();
   hints.set(DecodeHintType.POSSIBLE_FORMATS, [
     BarcodeFormat.PDF_417,
@@ -125,16 +127,24 @@ const readTicketBarcode = (image: HTMLCanvasElement) => {
 
   try {
     const reader = new BrowserMultiFormatReader(hints);
-    const result = reader.decodeFromCanvas(image);
-    return result.getText();
+    for (const image of images) {
+      try {
+        return reader.decodeFromCanvas(image).getText();
+      } catch {
+        // Try the next image variant before falling back to OCR.
+      }
+    }
   } catch {
-    return "";
+    // Barcode decoding is optional; OCR remains the fallback.
   }
+  return "";
 };
 
 const TeslimPage = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
   const [currentUser, setCurrentUser] = useState("");
   const [ticketText, setTicketText] = useState("");
   const [passengerName, setPassengerName] = useState("");
@@ -148,6 +158,8 @@ const TeslimPage = () => {
   const [records, setRecords] = useState<DeliveryRecord[]>(readRecords);
   const [loading, setLoading] = useState(false);
   const [readingFile, setReadingFile] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
 
   useEffect(() => {
     const role = localStorage.getItem("userRole");
@@ -163,6 +175,77 @@ const TeslimPage = () => {
       toast.error("Uçuş planı alınamadı; eşleştirme daha sonra tekrar denenebilir.");
     });
   }, [navigate]);
+
+  useEffect(() => () => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
+
+  useEffect(() => {
+    if (!cameraOpen || !videoRef.current || !cameraStreamRef.current) {
+      return;
+    }
+
+    videoRef.current.srcObject = cameraStreamRef.current;
+    void videoRef.current.play();
+  }, [cameraOpen]);
+
+  const stopCamera = () => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+    cameraStreamRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraOpen(false);
+  };
+
+  const startCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error("Bu tarayıcı kamera kullanımını desteklemiyor.");
+      return;
+    }
+
+    setCameraStarting(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      });
+      cameraStreamRef.current = stream;
+      setCameraOpen(true);
+    } catch (error) {
+      console.error("Camera access failed:", error);
+      toast.error("Kamera açılamadı. Tarayıcı kamera iznini kontrol edin.");
+    } finally {
+      setCameraStarting(false);
+    }
+  };
+
+  const captureCameraImage = async () => {
+    const video = videoRef.current;
+    if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      toast.error("Kamera görüntüsü henüz hazır değil.");
+      return;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      toast.error("Kamera görüntüsü işlenemedi.");
+      return;
+    }
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        toast.error("Bilet fotoğrafı oluşturulamadı.");
+        return;
+      }
+      stopCamera();
+      void handleFile(new File([blob], `ticket-${Date.now()}.jpg`, { type: "image/jpeg" }));
+    }, "image/jpeg", 0.95);
+  };
 
   const saveRecords = (nextRecords: DeliveryRecord[]) => {
     setRecords(nextRecords);
@@ -192,8 +275,9 @@ const TeslimPage = () => {
     try {
       if (file.type.startsWith("image/")) {
         toast.info("Bilet okunuyor; ilk kullanımda OCR dili indirilebilir.");
+        const rawImage = await prepareTicketImage(file, false);
         const preparedImage = await prepareTicketImage(file);
-        const barcodeText = readTicketBarcode(preparedImage);
+        const barcodeText = readTicketBarcode([rawImage, preparedImage]);
         const worker = await createWorker("tur+eng");
         try {
           await worker.setParameters({
@@ -311,7 +395,7 @@ const TeslimPage = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><ScanLine className="h-5 w-5 text-primary" />Bilet bilgilerini al</CardTitle>
-            <CardDescription>Bilet metnini yapıştırın veya PDF/metin dosyası yükleyin. Alanlar otomatik doldurulur.</CardDescription>
+            <CardDescription>Bilet metnini yapıştırın, kamerayla çekin veya dosya yükleyin. Alanlar otomatik doldurulur.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Textarea value={ticketText} onChange={(event) => applyTicketData(event.target.value)} placeholder={"Örnek:\nPassenger: AYŞE YILMAZ\nFlight: PC1234\nPNR: ABC123\nSeat: 12A"} className="min-h-32" />
@@ -319,11 +403,27 @@ const TeslimPage = () => {
               <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={readingFile}>
                 {readingFile ? <Loader2 className="animate-spin" /> : <Upload />} Dosyadan oku
               </Button>
+              <Button variant="outline" onClick={() => void startCamera()} disabled={readingFile || cameraStarting}>
+                {cameraStarting ? <Loader2 className="animate-spin" /> : <Camera />} Kamerayla çek
+              </Button>
               <input ref={fileInputRef} type="file" accept=".txt,.csv,.pdf,image/*" className="hidden" onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) void handleFile(file);
                 event.currentTarget.value = "";
               }} />
+              {cameraOpen && (
+                <div className="basis-full space-y-3 rounded-xl border border-primary/30 bg-background/60 p-3">
+                  <div className="relative overflow-hidden rounded-lg bg-black">
+                    <video ref={videoRef} className="aspect-video w-full object-contain" autoPlay playsInline muted />
+                    <div className="pointer-events-none absolute inset-4 rounded-lg border-2 border-dashed border-white/70" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button className="flex-1" onClick={() => void captureCameraImage()}><Camera />Fotoğraf çek ve oku</Button>
+                    <Button variant="outline" onClick={stopCamera}><X />Kapat</Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Bileti çerçeve içine alıp yazılar ve 2D kod net görünecek şekilde çekin.</p>
+                </div>
+              )}
               <Button onClick={() => void handleMatch()} disabled={loading || !flightCode.trim()}>{loading ? <Loader2 className="animate-spin" /> : <Plane />} Uçuşu eşleştir</Button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">

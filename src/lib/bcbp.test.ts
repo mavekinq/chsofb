@@ -40,4 +40,27 @@ describe("parseBCBP", () => {
     expect(isBcbpData(parsed)).toBe(false);
     expect(parsed.rawValue).toBe("hello world");
   });
+
+  it("accepts barcode prefixes and control characters", () => {
+    const value = [
+      "M1",
+      "DOE/JOHN<<<<<<<<<<<<",
+      "E",
+      "ABC1234",
+      "IST",
+      "LHR",
+      "TK ",
+      "01234",
+      "270",
+      "Y",
+      "12A ",
+      "00042",
+      "0",
+    ].join("").padEnd(60, "<");
+    const parsed = parseBCBP(`PDF_417: ${value}\u001d`);
+
+    expect(isBcbpData(parsed)).toBe(true);
+    expect(parsed.flightNumber).toBe("01234");
+    expect(parsed.rawValue).toContain("PDF_417");
+  });
 });
