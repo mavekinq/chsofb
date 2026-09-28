@@ -30,6 +30,36 @@ const countRows = (html: string) => {
   return matches?.length || 0;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const getFlightGate = async (flightId: string): Promise<string | null> => {
+  const detailUrl = new URL("https://antalyamobilemodules.antalya-airport.aero/ModulesApi/GetFlightDetail");
+  detailUrl.searchParams.set("airportName", "Antalya_FlightsDB");
+  detailUrl.searchParams.set("FLIGHT_ID", flightId);
+
+  const response = await fetch(detailUrl, {
+    headers: { "User-Agent": "Mozilla/5.0" },
+  });
+  if (!response.ok) {
+    throw new Error(`Flight detail request failed for ${flightId}: ${response.status}`);
+  }
+
+  const result: unknown = await response.json();
+  if (!isRecord(result) || result.Success !== true) {
+    throw new Error(`Flight detail response was unsuccessful for ${flightId}`);
+  }
+
+  const data = typeof result.data === "string" ? JSON.parse(result.data) as unknown : result.data;
+  if (!Array.isArray(data)) {
+    throw new Error(`Flight detail response had an invalid data shape for ${flightId}`);
+  }
+
+  const flight = data.find(isRecord);
+  const gate = flight?.GATE;
+  return typeof gate === "string" && gate.trim() ? gate.trim() : null;
+};
+
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -44,6 +74,48 @@ Deno.serve(async (request: Request) => {
 
   try {
     const payload = await request.json().catch(() => ({}));
+    const requestBody = payload as { mode?: unknown; flightIds?: unknown };
+
+    if (requestBody.mode === "details") {
+      if (!Array.isArray(requestBody.flightIds)) {
+        return new Response(JSON.stringify({ success: false, error: "flightIds must be an array" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const flightIds: unknown[] = [...new Set(requestBody.flightIds)];
+      if (
+        flightIds.length > 100
+        || flightIds.some((flightId) => typeof flightId !== "string" || !/^\d+$/.test(flightId))
+      ) {
+        return new Response(JSON.stringify({ success: false, error: "flightIds must contain up to 100 numeric IDs" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const gates: Record<string, string | null> = {};
+      const failedIds: string[] = [];
+      for (let index = 0; index < flightIds.length; index += 5) {
+        const batch = flightIds.slice(index, index + 5) as string[];
+        await Promise.all(batch.map(async (flightId) => {
+          try {
+            gates[flightId] = await getFlightGate(flightId);
+          } catch (error) {
+            console.error(`TAV flight gate lookup failed for ${flightId}:`, error);
+            gates[flightId] = null;
+            failedIds.push(flightId);
+          }
+        }));
+      }
+
+      return new Response(JSON.stringify({ success: true, gates, failedIds }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const sourceKey = resolveSourceKey((payload as { source?: unknown }).source);
     const sourceUrl = FLIGHT_SOURCE_URLS[sourceKey];
 

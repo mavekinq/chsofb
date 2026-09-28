@@ -4,6 +4,7 @@ import { ArrowLeft, Plane, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { attachTavFlightGates } from "@/lib/tav-flight-details";
 import {
   Table,
   TableBody,
@@ -15,6 +16,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 type TavFlight = {
+  id: string | null;
+  gate: string | null;
   flightNo: string;
   date: string;
   airline: string;
@@ -68,8 +71,19 @@ const parseHtmlFlights = (html: string): TavFlight[] => {
       const counter = cleanText(row.querySelector("td.belt span")?.textContent || "");
       const terminal = cleanText(row.querySelector("td.terminal span")?.textContent || "");
       const status = cleanText(row.querySelector("td.status span")?.textContent || "");
+      const flightId = Array.from(row.querySelectorAll<HTMLAnchorElement>('a[href*="flightid"]'))
+        .map((link) => {
+          try {
+            return new URL(link.href, doc.baseURI).searchParams.get("flightid");
+          } catch {
+            return null;
+          }
+        })
+        .find((value): value is string => Boolean(value?.trim())) || null;
 
       return {
+        id: flightId,
+        gate: null,
         flightNo,
         date,
         airline,
@@ -95,6 +109,8 @@ const parseProxyMarkdownFlights = (content: string): TavFlight[] => {
       if (cols[0].toLowerCase().includes("uçuş") || cols[0].toLowerCase().includes("uçuş") || cols[0].includes("---")) return null;
 
       return {
+        id: null,
+        gate: null,
         flightNo: cols[1] || "",
         date: cols[2] || "",
         airline: cols[3] || "",
@@ -152,10 +168,12 @@ const Tav2FlightsPage = () => {
         if (result.success && result.html) {
           const functionFlights = parseFlightsFromContent(result.html);
           if (functionFlights.length > 0) {
-            const pcFlights = functionFlights.filter((item) => isPcFlight(item.flightNo));
+            const { flights: pcFlights, warning } = await attachTavFlightGates(
+              functionFlights.filter((item) => isPcFlight(item.flightNo)),
+            );
             setAllFlights(pcFlights);
             setLastUpdated(new Date());
-            setSourceInfo(`Tam liste: ${pcFlights.length} PC uçuş (${result.source || "edge"})`);
+            setSourceInfo(`Tam liste: ${pcFlights.length} PC uçuş (${result.source || "edge"})${warning ? ` · ${warning}` : ""}`);
             return;
           }
         }
@@ -167,10 +185,12 @@ const Tav2FlightsPage = () => {
       const directFlights = parseFlightsFromContent(directContent);
 
       if (directFlights.length > 0) {
-        const pcFlights = directFlights.filter((item) => isPcFlight(item.flightNo));
+        const { flights: pcFlights, warning } = await attachTavFlightGates(
+          directFlights.filter((item) => isPcFlight(item.flightNo)),
+        );
         setAllFlights(pcFlights);
         setLastUpdated(new Date());
-        setSourceInfo(`Direkt kaynak: ${pcFlights.length} PC uçuş`);
+        setSourceInfo(`Direkt kaynak: ${pcFlights.length} PC uçuş${warning ? ` · ${warning}` : ""}`);
         return;
       }
       throw new Error("No flights in direct response");
@@ -185,10 +205,12 @@ const Tav2FlightsPage = () => {
           throw new Error("No flights in proxy response");
         }
 
-        const pcFlights = proxyFlights.filter((item) => isPcFlight(item.flightNo));
+        const { flights: pcFlights, warning } = await attachTavFlightGates(
+          proxyFlights.filter((item) => isPcFlight(item.flightNo)),
+        );
         setAllFlights(pcFlights);
         setLastUpdated(new Date());
-        setSourceInfo(`Proxy kaynak: ${pcFlights.length} PC uçuş (ilk bölüm)`);
+        setSourceInfo(`Proxy kaynak: ${pcFlights.length} PC uçuş (ilk bölüm)${warning ? ` · ${warning}` : ""}`);
       } catch (proxyError) {
         console.error("TAV2 flights fetch failed:", proxyError);
         setError("TAV iç hat uçuş verileri alınamadı.");
@@ -219,7 +241,7 @@ const Tav2FlightsPage = () => {
     if (!query) return allFlights;
 
     return allFlights.filter((flight) =>
-      [flight.flightNo, flight.city, flight.airline, flight.status, flight.counter, flight.terminal]
+      [flight.id, flight.flightNo, flight.gate, flight.city, flight.airline, flight.status, flight.counter, flight.terminal]
         .join(" ")
         .toLocaleLowerCase("tr-TR")
         .includes(query),
@@ -276,6 +298,8 @@ const Tav2FlightsPage = () => {
               <TableHeader>
                 <TableRow className="bg-secondary/50">
                   <TableHead>Uçuş</TableHead>
+                  <TableHead>Uçuş ID</TableHead>
+                  <TableHead>Gate</TableHead>
                   <TableHead>Tarih</TableHead>
                   <TableHead>Havayolu</TableHead>
                   <TableHead>Şehir</TableHead>
@@ -288,8 +312,10 @@ const Tav2FlightsPage = () => {
               </TableHeader>
               <TableBody>
                 {filteredFlights.map((flight) => (
-                  <TableRow key={`${flight.flightNo}-${flight.date}-${flight.scheduled}-${flight.counter}`}>
+                  <TableRow key={flight.id || `${flight.flightNo}-${flight.date}-${flight.scheduled}-${flight.counter}`}>
                     <TableCell className="font-medium">{flight.flightNo || "-"}</TableCell>
+                    <TableCell className="font-mono text-xs">{flight.id || "-"}</TableCell>
+                    <TableCell>{flight.gate || "-"}</TableCell>
                     <TableCell>{flight.date || "-"}</TableCell>
                     <TableCell>{flight.airline || "-"}</TableCell>
                     <TableCell>{flight.city || "-"}</TableCell>
