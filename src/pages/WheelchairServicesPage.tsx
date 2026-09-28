@@ -738,11 +738,11 @@ const FlightCardSkeleton = () => (
 );
 
 const SeatbeltLoading = () => (
-  <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card">
-    <CardContent className="flex min-h-56 flex-col items-center justify-center gap-3 p-6" role="status" aria-live="polite">
+  <div className="fixed inset-0 z-[100] flex min-h-screen items-center justify-center bg-background/95 px-4 backdrop-blur-md">
+    <div className="flex w-full max-w-md flex-col items-center justify-center gap-5 rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card p-8 shadow-2xl" role="status" aria-live="polite">
       <svg
         viewBox="0 0 180 80"
-        className="h-20 w-44 text-primary"
+        className="h-28 w-60 text-primary"
         fill="none"
         aria-hidden="true"
       >
@@ -759,11 +759,11 @@ const SeatbeltLoading = () => (
         <path className="seatbelt-spark" d="M90 10v-5m20 13 4-4M70 18l-4-4" stroke="hsl(var(--primary))" strokeWidth="3" strokeLinecap="round" />
       </svg>
       <div className="text-center">
-        <p className="font-heading text-sm font-semibold">Emniyet kemeri bağlanıyor</p>
-        <p className="mt-1 text-xs text-muted-foreground">Uçuş bilgileri hazırlanıyor…</p>
+        <p className="font-heading text-lg font-semibold">Emniyet kemeri bağlanıyor</p>
+        <p className="mt-2 text-sm text-muted-foreground">Uçuş bilgileri hazırlanıyor…</p>
       </div>
-    </CardContent>
-  </Card>
+    </div>
+  </div>
 );
 
 const ServiceCardSkeleton = () => (
@@ -2192,9 +2192,7 @@ const WheelchairServicesPage = () => {
                     </div>
                   </div>
 
-                  {showDailySeatbelt && !initialFlightLoadComplete ? (
-                    <SeatbeltLoading />
-                  ) : loading ? (
+                  {loading ? (
                     <div className="space-y-3">
                       {[1, 2, 3, 4].map((i) => <FlightCardSkeleton key={i} />)}
                     </div>
@@ -2562,6 +2560,7 @@ const WheelchairServicesPage = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {showDailySeatbelt && !initialFlightLoadComplete && <SeatbeltLoading />}
     </div>
   );
 };
