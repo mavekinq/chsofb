@@ -41,6 +41,7 @@ import { triggerGoogleSheetsSync } from "@/lib/google-sheets-sync";
 import { buildDeparturesPayload, buildFlightLookup, buildInventorySummaryPayload, buildSpecialServicesPayload } from "@/lib/google-sheets-payload";
 import { buildServiceNotesWithAssignedStaff, extractAssignedStaffFromService, getVisibleServiceNotes, isAssignedStaffSchemaCacheError } from "@/lib/wheelchair-service-utils";
 import { matchesWheelchairInventoryTerminal } from "@/lib/wheelchair-terminals";
+import { hasSpecialMemberAccess } from "@/lib/special-member";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import AddServiceDialog from "@/components/AddServiceDialog";
@@ -73,8 +74,46 @@ interface Flight {
   source_city?: string;
   source_counter?: string;
   source_terminal?: string;
+  stage_flight_key?: string;
   specialNotes?: string;
 }
+
+type FlightOpsStage = "hazirlik" | "boarding" | "gate-close";
+type FlightOpsStatus = {
+  stage: FlightOpsStage;
+  stageTimes: Partial<Record<FlightOpsStage, string>>;
+};
+type FlightOpsStatusRow = {
+  flight_key: string;
+  stage: string;
+  stage_times: unknown;
+};
+
+const FLIGHT_OPS_STAGES: Array<{ key: FlightOpsStage; label: string; color: string }> = [
+  { key: "hazirlik", label: "Hazırlık", color: "border-yellow-500 bg-yellow-500 text-black hover:bg-yellow-400" },
+  { key: "boarding", label: "Boarding", color: "border-green-600 bg-green-600 text-white hover:bg-green-500" },
+  { key: "gate-close", label: "Gate Close", color: "border-red-600 bg-red-600 text-white hover:bg-red-500" },
+];
+
+const parseFlightOpsStageTimes = (value: unknown): Partial<Record<FlightOpsStage, string>> => {
+  if (!value || typeof value !== "object") return {};
+  const raw = value as Record<string, unknown>;
+  return Object.fromEntries(
+    FLIGHT_OPS_STAGES.flatMap(({ key }) => typeof raw[key] === "string" ? [[key, raw[key] as string]] : []),
+  ) as Partial<Record<FlightOpsStage, string>>;
+};
+
+const formatFlightOpsTime = (value?: string) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+};
+
+const mapFlightOpsStatusRows = (rows: FlightOpsStatusRow[]) =>
+  Object.fromEntries(rows.map((row) => [row.flight_key, {
+    stage: row.stage as FlightOpsStage,
+    stageTimes: parseFlightOpsStageTimes(row.stage_times),
+  }])) as Record<string, FlightOpsStatus>;
 
 interface WheelchairService {
   assigned_staff: string;
@@ -674,6 +713,9 @@ const ServiceCardSkeleton = () => (
 
 const WheelchairServicesPage = () => {
   const navigate = useNavigate();
+  const [canManageFlightOps, setCanManageFlightOps] = useState(false);
+  const [flightOpsStatus, setFlightOpsStatus] = useState<Record<string, FlightOpsStatus>>({});
+  const [savingFlightOpsKey, setSavingFlightOpsKey] = useState<string | null>(null);
   const [flights, setFlights] = useState<Flight[]>([]);
   const [services, setServices] = useState<WheelchairService[]>([]);
   const [loading, setLoading] = useState(true);
@@ -958,6 +1000,7 @@ const WheelchairServicesPage = () => {
             dep_day_offset: depDayOffset,
             arrivalCode: entry.arrivalCode || undefined,
             arrivalTime: entry.arrivalTime || undefined,
+            stage_flight_key: [entry.departureCode || "", entry.departureTime || "", entry.tailNumber || ""].join("|"),
             dep_iata: "AYT",
             dep_terminal: getTerminalFromDestination(entry.departureIATA),
             dep_gate: entry.parkPosition || null,
@@ -985,19 +1028,29 @@ const WheelchairServicesPage = () => {
       const mergedFlights = [...t1Flights, ...t2Flights];
       const flightPlanPositionLookup = createFlightPlanPositionLookup(flightPlanEntries);
       const enrichedFlights = mergedFlights.map((flight) => {
+        const matchingEntry = flightPlanEntries.find((entry) =>
+          getFlightCodeMatchKeys(flight.flight_iata).some((key) =>
+            getFlightCodeMatchKeys(entry.departureCode || "").includes(key),
+          ),
+        );
         const gateFromFlightPlan = getFlightCodeMatchKeys(flight.flight_iata)
           .map((key) => flightPlanPositionLookup.get(key))
           .find((value): value is string => Boolean(value));
 
-        if (!gateFromFlightPlan) {
+        if (!gateFromFlightPlan && !matchingEntry) {
           return flight;
         }
 
         return {
           ...flight,
-          dep_gate: gateFromFlightPlan,
-          plannedPosition: gateFromFlightPlan,
-          parkPosition: gateFromFlightPlan,
+          stage_flight_key: matchingEntry
+            ? [matchingEntry.departureCode || "", matchingEntry.departureTime || "", matchingEntry.tailNumber || ""].join("|")
+            : flight.stage_flight_key,
+          ...(gateFromFlightPlan ? {
+            dep_gate: gateFromFlightPlan,
+            plannedPosition: gateFromFlightPlan,
+            parkPosition: gateFromFlightPlan,
+          } : {}),
         };
       });
 
@@ -1274,6 +1327,7 @@ const WheelchairServicesPage = () => {
   useEffect(() => {
     const user = localStorage.getItem("userName");
     if (user) setCurrentUser(user);
+    setCanManageFlightOps(hasSpecialMemberAccess(localStorage.getItem("securityNumber")));
 
     const cachedFlights = readOfflineCache<{ flights: Flight[] }>(OFFLINE_CACHE_KEYS.flights);
     if (cachedFlights?.flights && cachedFlights.flights.length > 0) {
@@ -1323,6 +1377,91 @@ const WheelchairServicesPage = () => {
       supabase.removeChannel(wheelchairsChannel);
     };
   }, []);
+
+  useEffect(() => {
+    if (!canManageFlightOps) return;
+
+    let cancelled = false;
+    const loadFlightOpsStatuses = async () => {
+      const { data, error } = await supabase
+        .from("chef_daily_flight_statuses")
+        .select("flight_key, stage, stage_times")
+        .eq("snapshot_date", todayKey);
+      if (error) {
+        console.error("Flight operation statuses load failed:", error);
+        toast.error("Uçuş hazırlık durumları yüklenemedi");
+        return;
+      }
+      if (!cancelled) {
+        setFlightOpsStatus(mapFlightOpsStatusRows((data || []) as FlightOpsStatusRow[]));
+      }
+    };
+
+    void loadFlightOpsStatuses();
+    const channel = supabase
+      .channel("wheelchair-flight-ops-statuses")
+      .on("postgres_changes", { event: "*", schema: "public", table: "chef_daily_flight_statuses" }, (payload) => {
+        const row = (payload.new || payload.old) as FlightOpsStatusRow;
+        if (!row.flight_key) return;
+        if (payload.eventType === "DELETE") {
+          setFlightOpsStatus((previous) => {
+            const next = { ...previous };
+            delete next[row.flight_key];
+            return next;
+          });
+          return;
+        }
+        if (row.stage && row.stage_times) {
+          setFlightOpsStatus((previous) => ({
+            ...previous,
+            [row.flight_key]: {
+              stage: row.stage as FlightOpsStage,
+              stageTimes: parseFlightOpsStageTimes(row.stage_times),
+            },
+          }));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [canManageFlightOps, todayKey]);
+
+  const handleFlightOpsStageChange = async (flight: Flight, stage: FlightOpsStage) => {
+    const flightKey = flight.stage_flight_key || `${flight.flight_iata}|${flight.dep_time}|`;
+    setSavingFlightOpsKey(flightKey);
+    try {
+      const now = new Date().toISOString();
+      const stageTimes = {
+        ...flightOpsStatus[flightKey]?.stageTimes,
+        [stage]: now,
+      };
+      const { error } = await supabase
+        .from("chef_daily_flight_statuses")
+        .upsert({
+          snapshot_date: todayKey,
+          flight_key: flightKey,
+          flight_code: flight.flight_iata,
+          departure_time: flight.dep_time || null,
+          stage,
+          stage_times: stageTimes,
+          updated_by: currentUser,
+          updated_at: now,
+        }, { onConflict: "snapshot_date,flight_key" });
+      if (error) throw error;
+      setFlightOpsStatus((previous) => ({
+        ...previous,
+        [flightKey]: { stage, stageTimes },
+      }));
+    } catch (error) {
+      console.error("Flight operation status update failed:", error);
+      toast.error("Uçuş durumu kaydedilemedi");
+    } finally {
+      setSavingFlightOpsKey(null);
+    }
+  };
 
   // ── Handlers ──
 
@@ -2101,6 +2240,35 @@ const WheelchairServicesPage = () => {
                                 </div>
 
                                 <Separator className="my-3 opacity-50" />
+
+                                {canManageFlightOps && (
+                                  <div className="mb-3 grid grid-cols-3 gap-2">
+                                    {FLIGHT_OPS_STAGES.map(({ key, label, color }) => {
+                                      const flightKey = flight.stage_flight_key || `${flight.flight_iata}|${flight.dep_time}|`;
+                                      const status = flightOpsStatus[flightKey];
+                                      const isActive = status?.stage === key;
+                                      return (
+                                        <div key={key} className="min-w-0 space-y-1">
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={savingFlightOpsKey === flightKey}
+                                            className={cn(
+                                              "h-8 w-full px-1.5 text-[11px]",
+                                              isActive ? color : "border-border text-muted-foreground hover:bg-secondary",
+                                            )}
+                                            onClick={() => void handleFlightOpsStageChange(flight, key)}
+                                          >
+                                            {label}
+                                          </Button>
+                                          <p className="text-center font-mono text-[10px] text-muted-foreground">
+                                            {formatFlightOpsTime(status?.stageTimes[key])}
+                                          </p>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
 
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
