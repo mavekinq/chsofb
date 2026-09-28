@@ -737,6 +737,35 @@ const FlightCardSkeleton = () => (
   </Card>
 );
 
+const SeatbeltLoading = () => (
+  <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card">
+    <CardContent className="flex min-h-56 flex-col items-center justify-center gap-3 p-6" role="status" aria-live="polite">
+      <svg
+        viewBox="0 0 180 80"
+        className="h-20 w-44 text-primary"
+        fill="none"
+        aria-hidden="true"
+      >
+        <g className="seatbelt-strap-left">
+          <rect x="8" y="32" width="66" height="16" rx="8" fill="currentColor" opacity=".82" />
+          <rect x="61" y="28" width="13" height="24" rx="3" fill="hsl(var(--foreground))" />
+        </g>
+        <g className="seatbelt-strap-right">
+          <rect x="106" y="32" width="66" height="16" rx="8" fill="currentColor" opacity=".82" />
+          <rect x="106" y="28" width="13" height="24" rx="3" fill="hsl(var(--foreground))" />
+        </g>
+        <rect className="seatbelt-buckle" x="73" y="21" width="34" height="38" rx="8" fill="hsl(var(--card))" stroke="hsl(var(--primary))" strokeWidth="4" />
+        <path d="M86 33v14l8 5 8-5V33" stroke="hsl(var(--primary))" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        <path className="seatbelt-spark" d="M90 10v-5m20 13 4-4M70 18l-4-4" stroke="hsl(var(--primary))" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+      <div className="text-center">
+        <p className="font-heading text-sm font-semibold">Emniyet kemeri bağlanıyor</p>
+        <p className="mt-1 text-xs text-muted-foreground">Uçuş bilgileri hazırlanıyor…</p>
+      </div>
+    </CardContent>
+  </Card>
+);
+
 const ServiceCardSkeleton = () => (
   <Card className="border-border/60">
     <CardContent className="py-3 px-4">
@@ -762,6 +791,7 @@ const WheelchairServicesPage = () => {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [services, setServices] = useState<WheelchairService[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialFlightLoadComplete, setInitialFlightLoadComplete] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("T1");
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
@@ -783,9 +813,19 @@ const WheelchairServicesPage = () => {
 
   // ── Flight notes (Supabase, per-day, auto-deleted at midnight) ──
   const todayKey = getIstanbulDateKey();
+  const seatbeltAnimationStorageKey = "wheelchair-services:seatbelt-animation-date";
+  const [showDailySeatbelt] = useState(
+    () => localStorage.getItem(seatbeltAnimationStorageKey) !== todayKey,
+  );
   const [flightNotes, setFlightNotes] = useState<Record<string, string>>({});
   const [noteDialog, setNoteDialog] = useState<{ flightIata: string; value: string } | null>(null);
   const tomorrowLabel = useMemo(() => getIstanbulTomorrowLabel(), []);
+
+  useEffect(() => {
+    if (showDailySeatbelt) {
+      localStorage.setItem(seatbeltAnimationStorageKey, todayKey);
+    }
+  }, [seatbeltAnimationStorageKey, showDailySeatbelt, todayKey]);
 
   // Load today's notes from Supabase on mount + delete old notes
   useEffect(() => {
@@ -1127,6 +1167,7 @@ const WheelchairServicesPage = () => {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      if (!silent) setInitialFlightLoadComplete(true);
     }
   };
 
@@ -2151,7 +2192,9 @@ const WheelchairServicesPage = () => {
                     </div>
                   </div>
 
-                  {loading ? (
+                  {showDailySeatbelt && !initialFlightLoadComplete ? (
+                    <SeatbeltLoading />
+                  ) : loading ? (
                     <div className="space-y-3">
                       {[1, 2, 3, 4].map((i) => <FlightCardSkeleton key={i} />)}
                     </div>

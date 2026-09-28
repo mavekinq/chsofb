@@ -70,6 +70,55 @@
   }
 }
 
+@keyframes seatbelt-left-click {
+  0%, 100% { transform: translateX(-12px); }
+  45%, 72% { transform: translateX(0); }
+}
+
+@keyframes seatbelt-right-click {
+  0%, 100% { transform: translateX(12px); }
+  45%, 72% { transform: translateX(0); }
+}
+
+@keyframes seatbelt-buckle-glow {
+  0%, 38%, 100% { filter: drop-shadow(0 0 0 hsl(var(--primary) / 0)); }
+  48%, 66% { filter: drop-shadow(0 0 8px hsl(var(--primary) / .7)); }
+}
+
+@keyframes seatbelt-spark-flash {
+  0%, 38%, 72%, 100% { opacity: 0; }
+  48%, 62% { opacity: 1; }
+}
+
+.seatbelt-strap-left {
+  transform-box: fill-box;
+  transform-origin: right center;
+  animation: seatbelt-left-click 2.4s ease-in-out infinite;
+}
+
+.seatbelt-strap-right {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: seatbelt-right-click 2.4s ease-in-out infinite;
+}
+
+.seatbelt-buckle {
+  animation: seatbelt-buckle-glow 2.4s ease-in-out infinite;
+}
+
+.seatbelt-spark {
+  animation: seatbelt-spark-flash 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seatbelt-strap-left,
+  .seatbelt-strap-right,
+  .seatbelt-buckle,
+  .seatbelt-spark {
+    animation: none;
+  }
+}
+
 @layer components {
   .status-available {
     @apply bg-[hsl(var(--status-available))]/15 text-[hsl(var(--status-available))] border border-[hsl(var(--status-available))]/30;
