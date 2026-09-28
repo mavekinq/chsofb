@@ -145,7 +145,9 @@ export type Database = {
           id: string
           snapshot_date: string
           stage: string
+          stage_reminders_sent: Json
           stage_times: Json
+          stage_updated_by: Json
           updated_at: string
           updated_by: string | null
         }
@@ -156,7 +158,9 @@ export type Database = {
           id?: string
           snapshot_date: string
           stage: string
+          stage_reminders_sent?: Json
           stage_times?: Json
+          stage_updated_by?: Json
           updated_at?: string
           updated_by?: string | null
         }
@@ -167,7 +171,9 @@ export type Database = {
           id?: string
           snapshot_date?: string
           stage?: string
+          stage_reminders_sent?: Json
           stage_times?: Json
+          stage_updated_by?: Json
           updated_at?: string
           updated_by?: string | null
         }
@@ -403,7 +409,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      claim_chef_daily_stage_reminder: {
+        Args: {
+          p_id: string
+          p_reminder_key: string
+          p_stage_key: string
+          p_stage_timestamp: string
+        }
+        Returns: boolean
+      }
+      finish_chef_daily_stage_reminder: {
+        Args: {
+          p_id: string
+          p_reminder_key: string
+          p_sent: boolean
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

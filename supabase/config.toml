@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.sync-google-sheets-auto]
 verify_jwt = false
+
+[functions.process-chef-daily-stage-reminders]
+verify_jwt = false

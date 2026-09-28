@@ -47,6 +47,7 @@ type ChefDailyStatusRow = {
   updated_at: string;
   updated_by: string | null;
   stage_times: unknown;
+  stage_updated_by: unknown;
 };
 
 type FlightStatusMeta = {
@@ -54,6 +55,7 @@ type FlightStatusMeta = {
   updatedAt: string;
   updatedBy: string | null;
   stageTimes: Partial<Record<FlightStage, string>>;
+  stageUpdatedBy: Partial<Record<FlightStage, string>>;
 };
 
 const getFlightKey = (flight: FlightPlanEntry) => [
@@ -104,12 +106,23 @@ const parseStageTimes = (value: unknown): Partial<Record<FlightStage, string>> =
   return result;
 };
 
+const parseStageUsers = (value: unknown): Partial<Record<FlightStage, string>> => {
+  if (!value || typeof value !== "object") return {};
+  const raw = value as Record<string, unknown>;
+  return Object.fromEntries(
+    FLIGHT_STAGES.flatMap(({ key }) =>
+      typeof raw[key] === "string" && raw[key] ? [[key, raw[key]]] : [],
+    ),
+  );
+};
+
 const mapStatusRows = (rows: ChefDailyStatusRow[]) => {
   return Object.fromEntries(rows.map((row) => [row.flight_key, {
     stage: row.stage,
     updatedAt: row.updated_at,
     updatedBy: row.updated_by,
     stageTimes: parseStageTimes(row.stage_times),
+    stageUpdatedBy: parseStageUsers(row.stage_updated_by),
   }])) as Record<string, FlightStatusMeta>;
 };
 
@@ -204,7 +217,7 @@ const SpecialMemberPage = () => {
           flightsPromise,
           supabase
             .from("chef_daily_flight_statuses")
-            .select("snapshot_date, flight_key, flight_code, departure_time, stage, updated_at, updated_by, stage_times")
+            .select("snapshot_date, flight_key, flight_code, departure_time, stage, updated_at, updated_by, stage_times, stage_updated_by")
             .eq("snapshot_date", selectedDate),
         ]);
 
@@ -272,6 +285,7 @@ const SpecialMemberPage = () => {
             updated_at?: string;
             updated_by?: string | null;
             stage_times?: unknown;
+            stage_updated_by?: unknown;
           };
           if (nextRecord.snapshot_date !== selectedDate || !nextRecord.flight_key) {
             return;
@@ -291,6 +305,7 @@ const SpecialMemberPage = () => {
                 updatedAt: nextRecord.updated_at,
                 updatedBy: nextRecord.updated_by || null,
                 stageTimes: parseStageTimes(nextRecord.stage_times),
+                stageUpdatedBy: parseStageUsers(nextRecord.stage_updated_by),
               };
             }
 
@@ -310,6 +325,7 @@ const SpecialMemberPage = () => {
   const handleStageChange = async (flight: FlightPlanEntry, stage: FlightStage) => {
     const flightKey = getFlightKey(flight);
     const stageTimes = statusByFlight[flightKey]?.stageTimes || {};
+    const stageUpdatedBy = statusByFlight[flightKey]?.stageUpdatedBy || {};
     setSavingFlightKey(flightKey);
 
     try {
@@ -317,6 +333,10 @@ const SpecialMemberPage = () => {
       const nextStageTimes = {
         ...stageTimes,
         [stage]: nowIso,
+      };
+      const nextStageUsers = {
+        ...stageUpdatedBy,
+        [stage]: currentUser,
       };
 
       const { error } = await supabase
@@ -328,6 +348,7 @@ const SpecialMemberPage = () => {
           departure_time: flight.departureTime || null,
           stage,
           stage_times: nextStageTimes,
+          stage_updated_by: nextStageUsers,
           updated_by: currentUser || null,
           updated_at: nowIso,
         }, { onConflict: "snapshot_date,flight_key" });
@@ -343,6 +364,7 @@ const SpecialMemberPage = () => {
           updatedAt: nowIso,
           updatedBy: currentUser || null,
           stageTimes: nextStageTimes,
+          stageUpdatedBy: nextStageUsers,
         },
       }));
     } catch (error) {

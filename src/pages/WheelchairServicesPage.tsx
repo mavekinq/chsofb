@@ -82,12 +82,14 @@ type FlightOpsStage = "hazirlik" | "boarding" | "gate-close";
 type FlightOpsStatus = {
   stage: FlightOpsStage;
   stageTimes: Partial<Record<FlightOpsStage, string>>;
+  stageUpdatedBy: Partial<Record<FlightOpsStage, string>>;
 };
 type FlightOpsStatusRow = {
   snapshot_date?: string;
   flight_key: string;
   stage: string;
   stage_times: unknown;
+  stage_updated_by?: unknown;
 };
 
 const FLIGHT_OPS_STAGES: Array<{ key: FlightOpsStage; label: string; color: string }> = [
@@ -114,7 +116,18 @@ const mapFlightOpsStatusRows = (rows: FlightOpsStatusRow[]) =>
   Object.fromEntries(rows.map((row) => [row.flight_key, {
     stage: row.stage as FlightOpsStage,
     stageTimes: parseFlightOpsStageTimes(row.stage_times),
+    stageUpdatedBy: parseFlightOpsStageUsers(row.stage_updated_by),
   }])) as Record<string, FlightOpsStatus>;
+
+const parseFlightOpsStageUsers = (value: unknown): Partial<Record<FlightOpsStage, string>> =>
+  value && typeof value === "object"
+    ? Object.fromEntries(
+      FLIGHT_OPS_STAGES.flatMap(({ key }) => {
+        const userName = (value as Record<string, unknown>)[key];
+        return typeof userName === "string" && userName.trim() ? [[key, userName]] : [];
+      }),
+    )
+    : {};
 
 interface WheelchairService {
   assigned_staff: string;
@@ -1384,7 +1397,7 @@ const WheelchairServicesPage = () => {
     const loadFlightOpsStatuses = async () => {
       const { data, error } = await supabase
         .from("chef_daily_flight_statuses")
-        .select("flight_key, stage, stage_times")
+        .select("flight_key, stage, stage_times, stage_updated_by")
         .eq("snapshot_date", todayKey);
       if (error) {
         console.error("Flight operation statuses load failed:", error);
@@ -1416,6 +1429,7 @@ const WheelchairServicesPage = () => {
             [row.flight_key]: {
               stage: row.stage as FlightOpsStage,
               stageTimes: parseFlightOpsStageTimes(row.stage_times),
+              stageUpdatedBy: parseFlightOpsStageUsers(row.stage_updated_by),
             },
           }));
         }
@@ -1438,6 +1452,10 @@ const WheelchairServicesPage = () => {
         ...flightOpsStatus[flightKey]?.stageTimes,
         [stage]: now,
       };
+      const stageUpdatedBy = {
+        ...parseFlightOpsStageUsers(flightOpsStatus[flightKey]?.stageUpdatedBy),
+        [stage]: currentUser,
+      };
       const { error } = await supabase
         .from("chef_daily_flight_statuses")
         .upsert({
@@ -1447,13 +1465,14 @@ const WheelchairServicesPage = () => {
           departure_time: flight.dep_time || null,
           stage,
           stage_times: stageTimes,
+          stage_updated_by: stageUpdatedBy,
           updated_by: currentUser,
           updated_at: now,
         }, { onConflict: "snapshot_date,flight_key" });
       if (error) throw error;
       setFlightOpsStatus((previous) => ({
         ...previous,
-        [flightKey]: { stage, stageTimes },
+        [flightKey]: { stage, stageTimes, stageUpdatedBy },
       }));
     } catch (error) {
       console.error("Flight operation status update failed:", error);
