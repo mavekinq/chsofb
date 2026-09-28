@@ -84,6 +84,7 @@ type FlightOpsStatus = {
   stageTimes: Partial<Record<FlightOpsStage, string>>;
 };
 type FlightOpsStatusRow = {
+  snapshot_date?: string;
   flight_key: string;
   stage: string;
   stage_times: unknown;
@@ -1379,8 +1380,6 @@ const WheelchairServicesPage = () => {
   }, []);
 
   useEffect(() => {
-    if (!canManageFlightOps) return;
-
     let cancelled = false;
     const loadFlightOpsStatuses = async () => {
       const { data, error } = await supabase
@@ -1402,7 +1401,7 @@ const WheelchairServicesPage = () => {
       .channel("wheelchair-flight-ops-statuses")
       .on("postgres_changes", { event: "*", schema: "public", table: "chef_daily_flight_statuses" }, (payload) => {
         const row = (payload.new || payload.old) as FlightOpsStatusRow;
-        if (!row.flight_key) return;
+        if (row.snapshot_date !== todayKey || !row.flight_key) return;
         if (payload.eventType === "DELETE") {
           setFlightOpsStatus((previous) => {
             const next = { ...previous };
@@ -1427,9 +1426,10 @@ const WheelchairServicesPage = () => {
       cancelled = true;
       void supabase.removeChannel(channel);
     };
-  }, [canManageFlightOps, todayKey]);
+  }, [todayKey]);
 
   const handleFlightOpsStageChange = async (flight: Flight, stage: FlightOpsStage) => {
+    if (!canManageFlightOps) return;
     const flightKey = flight.stage_flight_key || `${flight.flight_iata}|${flight.dep_time}|`;
     setSavingFlightOpsKey(flightKey);
     try {
@@ -2241,34 +2241,41 @@ const WheelchairServicesPage = () => {
 
                                 <Separator className="my-3 opacity-50" />
 
-                                {canManageFlightOps && (
-                                  <div className="mb-3 grid grid-cols-3 gap-2">
-                                    {FLIGHT_OPS_STAGES.map(({ key, label, color }) => {
-                                      const flightKey = flight.stage_flight_key || `${flight.flight_iata}|${flight.dep_time}|`;
-                                      const status = flightOpsStatus[flightKey];
-                                      const isActive = status?.stage === key;
-                                      return (
-                                        <div key={key} className="min-w-0 space-y-1">
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={savingFlightOpsKey === flightKey}
-                                            className={cn(
-                                              "h-8 w-full px-1.5 text-[11px]",
-                                              isActive ? color : "border-border text-muted-foreground hover:bg-secondary",
-                                            )}
-                                            onClick={() => void handleFlightOpsStageChange(flight, key)}
-                                          >
-                                            {label}
-                                          </Button>
-                                          <p className="text-center font-mono text-[10px] text-muted-foreground">
-                                            {formatFlightOpsTime(status?.stageTimes[key])}
-                                          </p>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
+                                <div className="mb-3 grid grid-cols-3 gap-2">
+                                  {FLIGHT_OPS_STAGES.map(({ key, label, color }) => {
+                                    const flightKey = flight.stage_flight_key || `${flight.flight_iata}|${flight.dep_time}|`;
+                                    const status = flightOpsStatus[flightKey];
+                                    const isActive = status?.stage === key;
+                                    return (
+                                      <div key={key} className="min-w-0 space-y-1">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          disabled={!canManageFlightOps || savingFlightOpsKey === flightKey}
+                                          aria-disabled={!canManageFlightOps}
+                                          title={canManageFlightOps ? label : "Bu durumu yalnızca yetkili personel güncelleyebilir"}
+                                          className={cn(
+                                            "h-8 w-full px-1.5 text-[11px]",
+                                            isActive
+                                              ? color
+                                              : "border-border text-muted-foreground hover:bg-secondary",
+                                            !canManageFlightOps && "cursor-not-allowed opacity-100",
+                                          )}
+                                          onClick={() => {
+                                            if (canManageFlightOps) {
+                                              void handleFlightOpsStageChange(flight, key);
+                                            }
+                                          }}
+                                        >
+                                          {label}
+                                        </Button>
+                                        <p className="text-center font-mono text-[10px] text-muted-foreground">
+                                          {formatFlightOpsTime(status?.stageTimes[key])}
+                                        </p>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
 
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
