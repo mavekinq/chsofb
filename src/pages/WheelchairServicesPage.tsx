@@ -45,6 +45,7 @@ import { hasSpecialMemberAccess } from "@/lib/special-member";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import AddServiceDialog from "@/components/AddServiceDialog";
+import { attachTavFlightGates } from "@/lib/tav-flight-details";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,8 @@ interface Flight {
   source_city?: string;
   source_counter?: string;
   source_terminal?: string;
+  tav_flight_id?: string;
+  tav_gate?: string | null;
   stage_flight_key?: string;
   specialNotes?: string;
 }
@@ -358,6 +361,7 @@ const parseDomesticFlightsFromHtml = (html: string) => {
       const estimated = row.querySelector("td.time.estimated span")?.textContent?.trim() || "";
       const gateOrCounter = row.querySelector("td.belt span")?.textContent?.trim() || "";
       const statusLabel = row.querySelector("td.status span")?.textContent?.trim() || "";
+      const tavFlightId = getTavFlightId(row, doc);
 
       if (!isAllowedT1Flight(rawFlight)) {
         return null;
@@ -394,6 +398,7 @@ const parseDomesticFlightsFromHtml = (html: string) => {
         source_city: row.querySelector("td.from span")?.textContent?.trim() || undefined,
         source_counter: gateOrCounter || undefined,
         source_terminal: row.querySelector("td.terminal span")?.textContent?.trim() || undefined,
+        tav_flight_id: tavFlightId || undefined,
       } as Flight;
     })
     .filter((flight): flight is Flight => Boolean(flight && flight.flight_iata));
@@ -412,6 +417,7 @@ const parseInternationalFlightsFromHtml = (html: string) => {
       const estimated = row.querySelector("td.time.estimated span")?.textContent?.trim() || "";
       const gateOrCounter = row.querySelector("td.belt span")?.textContent?.trim() || "";
       const statusLabel = row.querySelector("td.status span")?.textContent?.trim() || "";
+      const tavFlightId = getTavFlightId(row, doc);
 
       if (!isAllowedT2Flight(rawFlight)) {
         return null;
@@ -448,9 +454,32 @@ const parseInternationalFlightsFromHtml = (html: string) => {
         source_city: row.querySelector("td.from span")?.textContent?.trim() || undefined,
         source_counter: gateOrCounter || undefined,
         source_terminal: row.querySelector("td.terminal span")?.textContent?.trim() || undefined,
+        tav_flight_id: tavFlightId || undefined,
       } as Flight;
     })
     .filter((flight): flight is Flight => Boolean(flight && flight.flight_iata));
+};
+
+const getTavFlightId = (row: Element, doc: Document) =>
+  Array.from(row.querySelectorAll<HTMLAnchorElement>('a[href*="flightid"]'))
+    .map((link) => {
+      try {
+        return new URL(link.href, doc.baseURI).searchParams.get("flightid");
+      } catch {
+        return null;
+      }
+    })
+    .find((value): value is string => Boolean(value?.trim())) || null;
+
+const attachGateFromTav = async (flights: Flight[]): Promise<Flight[]> => {
+  const { flights: detailedFlights } = await attachTavFlightGates(
+    flights.map((flight) => ({ ...flight, id: flight.tav_flight_id || null })),
+  );
+
+  return detailedFlights.map(({ gate, id: _id, ...flight }) => ({
+    ...flight,
+    tav_gate: gate,
+  }));
 };
 
 const fetchDomesticTavFlights = async (): Promise<Flight[]> => {
@@ -468,7 +497,7 @@ const fetchDomesticTavFlights = async (): Promise<Flight[]> => {
       return [];
     }
 
-    return parseDomesticFlightsFromHtml(result.html);
+    return attachGateFromTav(parseDomesticFlightsFromHtml(result.html));
   } catch {
     return [];
   }
@@ -489,7 +518,7 @@ const fetchInternationalTavFlights = async (): Promise<Flight[]> => {
       return [];
     }
 
-    return parseInternationalFlightsFromHtml(result.html);
+    return attachGateFromTav(parseInternationalFlightsFromHtml(result.html));
   } catch {
     return [];
   }
@@ -2140,6 +2169,7 @@ const WheelchairServicesPage = () => {
                       {sortedFilteredFlights.map((flight, index) => {
                         const serviceCount = getServiceCountForFlight(flight);
                         const gate = getDisplayGate(flight);
+                        const tavGate = normalizeGateValue(flight.tav_gate);
                         const counter = getDisplayCounter(flight);
                         const terminal = resolveFlightTerminal(flight);
                         const isTavStyledFlight = Boolean(
@@ -2319,6 +2349,12 @@ const WheelchairServicesPage = () => {
                                         <span className="flex items-center gap-1 opacity-0">
                                           <MapPin className="w-3 h-3" />
                                           Gate -
+                                        </span>
+                                      )}
+                                      {tavGate && (
+                                        <span className="flex items-center gap-1">
+                                          <MapPin className="w-3 h-3" />
+                                          Tav-Gate {tavGate}
                                         </span>
                                       )}
                                     </div>
