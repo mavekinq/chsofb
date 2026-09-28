@@ -39,11 +39,14 @@ const STAGE_BUTTON_ACTIVE_STYLES: Record<FlightStage, string> = {
 };
 
 type ChefDailyStatusRow = {
+  snapshot_date?: string;
   flight_key: string;
+  flight_code?: string;
+  departure_time?: string | null;
   stage: FlightStage;
   updated_at: string;
   updated_by: string | null;
-  stage_times: Record<string, string> | null;
+  stage_times: unknown;
 };
 
 type FlightStatusMeta = {
@@ -123,15 +126,28 @@ const SpecialMemberPage = () => {
   const [statusByFlight, setStatusByFlight] = useState<Record<string, FlightStatusMeta>>({});
   const [savingFlightKey, setSavingFlightKey] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [showGateClose, setShowGateClose] = useState(false);
+  const [showGateClose, setShowGateClose] = useState(true);
 
   useEffect(() => {
     const loadSnapshotDates = async () => {
       try {
-        const snapshotDates = await fetchFlightPlanSnapshotDates();
-        const mergedDates = Array.from(new Set([todayDateKey, ...snapshotDates]));
+        const [snapshotDates, statusDatesResponse] = await Promise.all([
+          fetchFlightPlanSnapshotDates(),
+          supabase
+            .from("chef_daily_flight_statuses")
+            .select("snapshot_date")
+            .order("snapshot_date", { ascending: false }),
+        ]);
+        if (statusDatesResponse.error) {
+          throw statusDatesResponse.error;
+        }
+        const statusDates = (statusDatesResponse.data || []).map((row) => row.snapshot_date);
+        const mergedDates = Array.from(new Set([todayDateKey, ...snapshotDates, ...statusDates]))
+          .sort((left, right) => right.localeCompare(left));
         setAvailableDates(mergedDates);
-      } catch {
+      } catch (error) {
+        console.error("Chef-Daily available dates load failed:", error);
+        toast.error("Kayıtlı günler yüklenemedi");
         setAvailableDates([todayDateKey]);
       }
     };
@@ -188,7 +204,7 @@ const SpecialMemberPage = () => {
           flightsPromise,
           supabase
             .from("chef_daily_flight_statuses")
-            .select("flight_key, stage, updated_at, updated_by, stage_times")
+            .select("snapshot_date, flight_key, flight_code, departure_time, stage, updated_at, updated_by, stage_times")
             .eq("snapshot_date", selectedDate),
         ]);
 
@@ -200,11 +216,31 @@ const SpecialMemberPage = () => {
           return;
         }
 
+        const statuses = (statusesResponse.data || []) as ChefDailyStatusRow[];
         const departureFlights = entries
           .filter((entry) => Boolean(entry.departureCode));
 
-        setFlights(departureFlights);
-        setStatusByFlight(mapStatusRows((statusesResponse.data || []) as ChefDailyStatusRow[]));
+        const knownFlightKeys = new Set(departureFlights.map(getFlightKey));
+        const statusOnlyFlights = statuses
+          .filter((row) => !knownFlightKeys.has(row.flight_key) && Boolean(row.flight_code))
+          .map((row) => {
+            const [departureCode = "", keyDepartureTime = "", tailNumber = ""] = row.flight_key.split("|");
+            return {
+              arrivalCode: "",
+              departureCode: row.flight_code || departureCode,
+              aircraftType: "",
+              tailNumber,
+              arrivalTime: "",
+              departureTime: row.departure_time || keyDepartureTime,
+              arrivalIATA: "",
+              departureIATA: "",
+              parkPosition: "",
+              specialNotes: "",
+            } satisfies FlightPlanEntry;
+          });
+
+        setFlights([...departureFlights, ...statusOnlyFlights]);
+        setStatusByFlight(mapStatusRows(statuses));
       } catch (error) {
         if (!cancelled) {
           console.error("Chef-Daily load failed:", error);
@@ -235,8 +271,9 @@ const SpecialMemberPage = () => {
             stage?: FlightStage;
             updated_at?: string;
             updated_by?: string | null;
+            stage_times?: unknown;
           };
-          if (nextRecord.snapshot_date !== snapshotDate || !nextRecord.flight_key) {
+          if (nextRecord.snapshot_date !== selectedDate || !nextRecord.flight_key) {
             return;
           }
 
@@ -253,6 +290,7 @@ const SpecialMemberPage = () => {
                 stage: nextRecord.stage,
                 updatedAt: nextRecord.updated_at,
                 updatedBy: nextRecord.updated_by || null,
+                stageTimes: parseStageTimes(nextRecord.stage_times),
               };
             }
 
