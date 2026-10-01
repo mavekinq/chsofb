@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Users } from "lucide-react";
 import {
   getStoredSchedulePayload,
   loadSchedulePayload,
@@ -98,6 +98,7 @@ const WorkSchedulePage = () => {
   const weekDatesScrollRef = useRef<HTMLDivElement | null>(null);
   const [now, setNow] = useState(new Date());
   const [query, setQuery] = useState("");
+  const [showAllShifts, setShowAllShifts] = useState(false);
   const [payload, setPayload] = useState<SchedulePayload>(() => getStoredSchedulePayload());
   const [selectedDate, setSelectedDate] = useState(() => {
     const initialPayload = getStoredSchedulePayload();
@@ -245,6 +246,17 @@ const WorkSchedulePage = () => {
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], "tr"));
   }, [payload.employees, query, selectedDate]);
 
+  const displayedNowGrouped = useMemo(() => {
+    if (!showAllShifts) {
+      return groupedByTeam;
+    }
+
+    return selectedDayGrouped.map(([team, people]) => [
+      team,
+      people.map((person) => ({ ...person, source: "today" as const })),
+    ] as const);
+  }, [groupedByTeam, selectedDayGrouped, showAllShifts]);
+
   const selectedDayCount = useMemo(
     () => selectedDayGrouped.reduce((sum, [, people]) => sum + people.length, 0),
     [selectedDayGrouped],
@@ -344,29 +356,55 @@ const WorkSchedulePage = () => {
         </div>
 
         <div className="bg-card border border-border rounded-lg p-4 mb-4">
-          <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <h2 className="font-heading text-lg">Filtreler</h2>
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Isim veya ekip ara..."
-              className="md:max-w-sm"
-            />
+            <div className="flex flex-col gap-2 sm:flex-row md:items-center">
+              {isNowMode && (
+                <Button
+                  type="button"
+                  variant={showAllShifts ? "secondary" : "outline"}
+                  aria-pressed={showAllShifts}
+                  onClick={() => setShowAllShifts((current) => !current)}
+                  className="gap-2"
+                >
+                  <Users className="h-4 w-4" />
+                  {showAllShifts
+                    ? "Sadece Şu An Vardiyada"
+                    : `Tüm Vardiyaları Göster${selectedDayCount ? ` (${selectedDayCount})` : ""}`}
+                </Button>
+              )}
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Isim veya ekip ara..."
+                className="sm:w-64 md:max-w-sm"
+              />
+            </div>
           </div>
         </div>
 
         {isNowMode ? (
           <div className="bg-card border border-border rounded-lg p-4">
-            <h2 className="font-heading text-lg mb-1">Su An Vardiyada Olanlar</h2>
-            <p className="text-sm text-muted-foreground mb-4">Bolume gore aktif personel listesi.</p>
+            <h2 className="font-heading text-lg mb-1">
+              {showAllShifts ? "Bugünkü Tüm Vardiyalar" : "Su An Vardiyada Olanlar"}
+            </h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              {showAllShifts
+                ? "Bugün programa kayıtlı tüm vardiyalar ekiplerine göre listelenir."
+                : "Bolume gore aktif personel listesi."}
+            </p>
 
             {todayIndex === -1 ? (
               <p className="text-sm text-muted-foreground">Bu saat, yuklu haftalik programa dahil degil.</p>
-            ) : groupedByTeam.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Bu saatte vardiyada aktif personel bulunmuyor.</p>
+            ) : displayedNowGrouped.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {showAllShifts
+                  ? "Bugün için programa kayıtlı vardiya bulunmuyor."
+                  : "Bu saatte vardiyada aktif personel bulunmuyor."}
+              </p>
             ) : (
               <div className="space-y-3">
-                {groupedByTeam.map(([team, people]) => (
+                {displayedNowGrouped.map(([team, people]) => (
                   <div key={team} className={`border border-border rounded-lg p-3 ${getTeamColorClass(team)}`}>
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-medium">{team}</h3>
