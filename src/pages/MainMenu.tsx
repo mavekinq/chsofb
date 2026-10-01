@@ -1,55 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Accessibility,
-  Activity,
-  AlertTriangle,
-  ArrowRight,
-  Bell,
-  Briefcase,
-  CalendarDays,
-  CheckCircle2,
-  ChevronRight,
-  ClipboardCheck,
-  ExternalLink,
-  LogOut,
-  Megaphone,
-  Newspaper,
-  Phone,
-  Plane,
-  RefreshCw,
-  Settings,
-  Shield,
-  Star,
-  Users,
-} from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
+import { Accessibility, ArrowRight, Bell, Briefcase, CalendarDays, ClipboardCheck, ExternalLink, LogOut, Megaphone, Newspaper, Phone, Plane, RefreshCw, Settings, Shield, Star, Users } from "lucide-react";
 import SplashScreen from "@/components/SplashScreen";
 import { BRIEFINGS_UPDATED_EVENT, getBriefings, loadBriefings } from "@/lib/briefings";
-import {
-  CELEBI_NEWS_SOURCE_URL,
-  type CelebiNewsItem,
-  fetchCelebiNews,
-} from "@/lib/celebi-news";
+import { CELEBI_NEWS_SOURCE_URL, type CelebiNewsItem, fetchCelebiNews } from "@/lib/celebi-news";
 import { fetchFlightPlanEntries } from "@/lib/flight-plan";
 import { readOfflineCache, saveOfflineCache } from "@/lib/offline-cache";
-import {
-  ensurePushSubscription,
-  getNotificationPermissionState,
-  isNotificationSupported,
-  requiresInstalledPwaForPush,
-  syncPushSubscriptionIfEnabled,
-} from "@/lib/notifications";
-import {
-  getStoredSchedulePayload,
-  loadSchedulePayload,
-  type SchedulePayload,
-  WORK_SCHEDULE_UPDATED_EVENT,
-} from "@/lib/work-schedule";
+import { ensurePushSubscription, getNotificationPermissionState, isNotificationSupported, requiresInstalledPwaForPush, syncPushSubscriptionIfEnabled } from "@/lib/notifications";
+import { getStoredSchedulePayload, loadSchedulePayload, type SchedulePayload, WORK_SCHEDULE_UPDATED_EVENT } from "@/lib/work-schedule";
 import { hasSpecialMemberAccess } from "@/lib/special-member";
 import { hasTeslimAccess } from "@/lib/teslim-access";
 import { toast } from "sonner";
@@ -68,14 +29,12 @@ const getMinuteOfDay = (date: Date) => date.getHours() * 60 + date.getMinutes();
 const parseShift = (value: string) => {
   const normalized = (value || "").trim().replace(/\s+/g, "");
   const match = normalized.match(SHIFT_PATTERN);
-
   if (!match) {
     return null;
   }
 
   const start = Number(match[1]) * 60 + Number(match[2]);
   const end = Number(match[3]) * 60 + Number(match[4]);
-
   return {
     start,
     end,
@@ -85,7 +44,6 @@ const parseShift = (value: string) => {
 
 const isActiveForToday = (shiftValue: string, minuteNow: number) => {
   const parsed = parseShift(shiftValue);
-
   if (!parsed) {
     return false;
   }
@@ -99,7 +57,6 @@ const isActiveForToday = (shiftValue: string, minuteNow: number) => {
 
 const isActiveFromPreviousDayOvernight = (shiftValue: string, minuteNow: number) => {
   const parsed = parseShift(shiftValue);
-
   if (!parsed || !parsed.overnight) {
     return false;
   }
@@ -110,150 +67,15 @@ const isActiveFromPreviousDayOvernight = (shiftValue: string, minuteNow: number)
 const DASHBOARD_SUMMARY_CACHE_KEY = "main-menu:dashboard-summary";
 const MAIN_MENU_NEWS_CACHE_KEY = "main-menu:news-items";
 
-type QuickActionProps = {
-  icon: ReactNode;
-  title: string;
-  description: string;
-  onClick: () => void;
-  accent?: "blue" | "cyan" | "neutral" | "amber";
-  badge?: string;
-};
-
-const QuickAction = ({
-  icon,
-  title,
-  description,
-  onClick,
-  accent = "neutral",
-  badge,
-}: QuickActionProps) => {
-  const accentClasses = {
-    blue: "border-primary/30 bg-primary/[0.07] hover:border-primary/60 hover:bg-primary/[0.11]",
-    cyan: "border-cyan-400/25 bg-cyan-400/[0.05] hover:border-cyan-400/50 hover:bg-cyan-400/[0.09]",
-    amber: "border-amber-400/25 bg-amber-400/[0.05] hover:border-amber-400/50 hover:bg-amber-400/[0.09]",
-    neutral: "border-white/[0.08] bg-white/[0.025] hover:border-primary/40 hover:bg-white/[0.045]",
-  };
-
-  const iconClasses = {
-    blue: "bg-primary/10 text-primary",
-    cyan: "bg-cyan-400/10 text-cyan-300",
-    amber: "bg-amber-400/10 text-amber-300",
-    neutral: "bg-white/[0.05] text-slate-300",
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`group flex min-h-[92px] w-full items-center gap-3 rounded-2xl border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10 active:scale-[0.99] ${accentClasses[accent]}`}
-    >
-      <span
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${iconClasses[accent]}`}
-      >
-        {icon}
-      </span>
-
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2">
-          <span className="truncate font-heading text-sm font-semibold text-foreground">
-            {title}
-          </span>
-          {badge && (
-            <span className="rounded-full bg-cyan-400/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-cyan-300">
-              {badge}
-            </span>
-          )}
-        </span>
-        <span className="mt-1 block line-clamp-2 text-xs leading-5 text-muted-foreground">
-          {description}
-        </span>
-      </span>
-
-      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-    </button>
-  );
-};
-
-type StatCardProps = {
-  icon: ReactNode;
-  label: string;
-  value: number | string;
-  description: string;
-  tone?: "blue" | "cyan" | "green" | "red";
-  loading?: boolean;
-};
-
-const StatCard = ({
-  icon,
-  label,
-  value,
-  description,
-  tone = "blue",
-  loading = false,
-}: StatCardProps) => {
-  const tones = {
-    blue: {
-      icon: "bg-primary/10 text-primary",
-      value: "text-primary",
-      dot: "bg-primary",
-    },
-    cyan: {
-      icon: "bg-cyan-400/10 text-cyan-300",
-      value: "text-cyan-300",
-      dot: "bg-cyan-300",
-    },
-    green: {
-      icon: "bg-emerald-400/10 text-emerald-300",
-      value: "text-emerald-300",
-      dot: "bg-emerald-300",
-    },
-    red: {
-      icon: "bg-rose-400/10 text-rose-300",
-      value: "text-rose-300",
-      dot: "bg-rose-300",
-    },
-  };
-
-  const currentTone = tones[tone];
-
-  return (
-    <div className="rounded-2xl border border-white/[0.08] bg-[#0c1422]/80 p-4 transition-colors hover:border-white/[0.14]">
-      <div className="flex items-start justify-between gap-3">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${currentTone.icon}`}>
-          {icon}
-        </div>
-        <span className={`mt-2 h-1.5 w-1.5 rounded-full ${currentTone.dot}`} />
-      </div>
-
-      <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-        {label}
-      </p>
-
-      <p className={`mt-1 font-heading text-4xl font-semibold tracking-tight ${currentTone.value}`}>
-        {loading ? (
-          <span className="inline-block h-9 w-10 animate-pulse rounded-md bg-white/[0.06]" />
-        ) : (
-          value
-        )}
-      </p>
-
-      <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
-    </div>
-  );
-};
-
 const MainMenu = () => {
   const navigate = useNavigate();
-
   const [splash, setSplash] = useState(true);
   const [currentUser, setCurrentUser] = useState("");
   const [isAdminUser, setIsAdminUser] = useState(false);
-
   const [briefings, setBriefings] = useState<string[]>(() => getBriefings());
   const [newsItems, setNewsItems] = useState<CelebiNewsItem[]>([]);
   const [newsLoading, setNewsLoading] = useState(true);
   const [newsError, setNewsError] = useState("");
-
   const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary>({
     activeServices: 0,
     missingWheelchairs: 0,
@@ -261,41 +83,27 @@ const MainMenu = () => {
     departureFlights: 0,
   });
   const [summaryLoading, setSummaryLoading] = useState(true);
-
-  const [notificationPermission, setNotificationPermission] = useState(() =>
-    getNotificationPermissionState(),
-  );
+  const [notificationPermission, setNotificationPermission] = useState(() => getNotificationPermissionState());
   const [notificationRequesting, setNotificationRequesting] = useState(false);
-  const [needsInstalledPwa, setNeedsInstalledPwa] = useState(() =>
-    requiresInstalledPwaForPush(),
-  );
-
+  const [needsInstalledPwa, setNeedsInstalledPwa] = useState(() => requiresInstalledPwaForPush());
   const [now, setNow] = useState(new Date());
-  const [schedulePayload, setSchedulePayload] = useState<SchedulePayload>(() =>
-    getStoredSchedulePayload(),
-  );
-
+  const [schedulePayload, setSchedulePayload] = useState<SchedulePayload>(() => getStoredSchedulePayload());
   const [hasSpecialAccess, setHasSpecialAccess] = useState(false);
   const [hasTeslimUserAccess, setHasTeslimUserAccess] = useState(false);
 
   const nowLabel = useMemo(
-    () =>
-      now.toLocaleString("tr-TR", {
-        weekday: "long",
-        day: "2-digit",
-        month: "long",
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+    () => now.toLocaleString("tr-TR", {
+      weekday: "long",
+      day: "2-digit",
+      month: "long",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
     [now],
   );
 
-  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-    now.getDate(),
-  ).padStart(2, "0")}`;
-
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const minuteNow = getMinuteOfDay(now);
-
   const activeScheduleCount = useMemo(() => {
     const todayIndex = schedulePayload.weekDates.indexOf(todayKey);
     const previousDayKey = todayIndex > 0 ? schedulePayload.weekDates[todayIndex - 1] : null;
@@ -308,35 +116,23 @@ const MainMenu = () => {
       const todayShift = employee.shifts[todayKey] || "";
       const previousShift = previousDayKey ? employee.shifts[previousDayKey] || "" : "";
 
-      if (
-        isActiveForToday(todayShift, minuteNow) ||
-        (previousDayKey && isActiveFromPreviousDayOvernight(previousShift, minuteNow))
-      ) {
+      if (isActiveForToday(todayShift, minuteNow) || (previousDayKey && isActiveFromPreviousDayOvernight(previousShift, minuteNow))) {
         return count + 1;
       }
 
       return count;
     }, 0);
-  }, [
-    minuteNow,
-    schedulePayload.employees,
-    schedulePayload.weekDates,
-    todayKey,
-  ]);
-
-  const totalFlights =
-    dashboardSummary.arrivalFlights + dashboardSummary.departureFlights;
+  }, [minuteNow, schedulePayload.employees, schedulePayload.weekDates, todayKey]);
+  const totalFlights = dashboardSummary.arrivalFlights + dashboardSummary.departureFlights;
 
   useEffect(() => {
     const user = localStorage.getItem("userName");
     const role = localStorage.getItem("userRole");
     const securityNumber = localStorage.getItem("securityNumber");
-
     if (!user) {
       navigate("/login");
       return;
     }
-
     setCurrentUser(user);
     setIsAdminUser(role === "admin");
     setHasSpecialAccess(hasSpecialMemberAccess(securityNumber));
@@ -367,10 +163,7 @@ const MainMenu = () => {
     window.addEventListener("storage", syncSchedule);
 
     return () => {
-      window.removeEventListener(
-        WORK_SCHEDULE_UPDATED_EVENT,
-        syncSchedule as EventListener,
-      );
+      window.removeEventListener(WORK_SCHEDULE_UPDATED_EVENT, syncSchedule as EventListener);
       window.removeEventListener("storage", syncSchedule);
     };
   }, []);
@@ -387,17 +180,11 @@ const MainMenu = () => {
       setBriefings(items);
     });
 
-    window.addEventListener(
-      BRIEFINGS_UPDATED_EVENT,
-      handleBriefingsUpdated as EventListener,
-    );
+    window.addEventListener(BRIEFINGS_UPDATED_EVENT, handleBriefingsUpdated as EventListener);
     window.addEventListener("storage", handleStorage);
 
     return () => {
-      window.removeEventListener(
-        BRIEFINGS_UPDATED_EVENT,
-        handleBriefingsUpdated as EventListener,
-      );
+      window.removeEventListener(BRIEFINGS_UPDATED_EVENT, handleBriefingsUpdated as EventListener);
       window.removeEventListener("storage", handleStorage);
     };
   }, []);
@@ -411,22 +198,15 @@ const MainMenu = () => {
 
       try {
         const items = await fetchCelebiNews();
-
         if (!cancelled) {
           setNewsItems(items);
           saveOfflineCache(MAIN_MENU_NEWS_CACHE_KEY, items);
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          const cachedItems =
-            readOfflineCache<CelebiNewsItem[]>(MAIN_MENU_NEWS_CACHE_KEY) || [];
-
+          const cachedItems = readOfflineCache<CelebiNewsItem[]>(MAIN_MENU_NEWS_CACHE_KEY) || [];
           setNewsItems(cachedItems);
-          setNewsError(
-            cachedItems.length > 0
-              ? "Çevrimdışı: kayıtlı haberler gösteriliyor."
-              : "Çelebi haberleri şu an yüklenemedi.",
-          );
+          setNewsError(cachedItems.length > 0 ? "Çevrimdışı: kayıtlı haberler gösteriliyor." : "Çelebi haberleri şu an yüklenemedi.");
         }
       } finally {
         if (!cancelled) {
@@ -449,14 +229,11 @@ const MainMenu = () => {
       setSummaryLoading(true);
 
       try {
-        const [servicesResult, wheelchairsResult, flightEntries] =
-          await Promise.all([
-            supabase
-              .from("wheelchair_services")
-              .select("id", { count: "exact", head: true }),
-            supabase.from("wheelchairs").select("id, status"),
-            fetchFlightPlanEntries(),
-          ]);
+        const [servicesResult, wheelchairsResult, flightEntries] = await Promise.all([
+          supabase.from("wheelchair_services").select("id", { count: "exact", head: true }),
+          supabase.from("wheelchairs").select("id, status"),
+          fetchFlightPlanEntries(),
+        ]);
 
         if (cancelled) {
           return;
@@ -466,31 +243,21 @@ const MainMenu = () => {
           throw new Error("Dashboard summary fetch failed");
         }
 
-        const arrivalFlights = flightEntries.filter(
-          (entry) => entry.arrivalCode,
-        ).length;
+        const arrivalFlights = flightEntries.filter((entry) => entry.arrivalCode).length;
+        const departureFlights = flightEntries.filter((entry) => entry.departureCode).length;
 
-        const departureFlights = flightEntries.filter(
-          (entry) => entry.departureCode,
-        ).length;
-
-        const nextSummary: DashboardSummary = {
+        const nextSummary = {
           activeServices: servicesResult.count ?? 0,
-          missingWheelchairs:
-            wheelchairsResult.data?.filter(
-              (wheelchair) => wheelchair.status === "missing",
-            ).length ?? 0,
+          missingWheelchairs: wheelchairsResult.data?.filter((wheelchair) => wheelchair.status === "missing").length ?? 0,
           arrivalFlights,
           departureFlights,
         };
 
         setDashboardSummary(nextSummary);
         saveOfflineCache(DASHBOARD_SUMMARY_CACHE_KEY, nextSummary);
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          const cachedSummary =
-            readOfflineCache<DashboardSummary>(DASHBOARD_SUMMARY_CACHE_KEY);
-
+          const cachedSummary = readOfflineCache<DashboardSummary>(DASHBOARD_SUMMARY_CACHE_KEY);
           if (cachedSummary) {
             setDashboardSummary(cachedSummary);
           }
@@ -506,34 +273,16 @@ const MainMenu = () => {
 
     const serviceChannel = supabase
       .channel("main-menu-services")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "wheelchair_services",
-        },
-        () => {
-          void loadDashboardSummary();
-        },
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "wheelchair_services" }, () => {
+        void loadDashboardSummary();
+      })
       .subscribe();
-
     const wheelchairChannel = supabase
       .channel("main-menu-wheelchairs")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "wheelchairs",
-        },
-        () => {
-          void loadDashboardSummary();
-        },
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "wheelchairs" }, () => {
+        void loadDashboardSummary();
+      })
       .subscribe();
-
     const flightRefreshTimer = window.setInterval(() => {
       void loadDashboardSummary();
     }, 60000);
@@ -556,7 +305,6 @@ const MainMenu = () => {
       setNotificationPermission(getNotificationPermissionState());
       setNeedsInstalledPwa(requiresInstalledPwaForPush());
     };
-
     updatePermission();
     window.addEventListener("focus", updatePermission);
 
@@ -571,11 +319,7 @@ const MainMenu = () => {
     }
 
     void syncPushSubscriptionIfEnabled(currentUser).catch((error) => {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Push aboneliği yenilenemedi",
-      );
+      toast.error(error instanceof Error ? error.message : "Push aboneliği yenilenemedi");
     });
   }, [currentUser, notificationPermission]);
 
@@ -583,25 +327,18 @@ const MainMenu = () => {
     setNotificationRequesting(true);
 
     try {
-      await ensurePushSubscription(
-        currentUser || localStorage.getItem("userName") || "Personel",
-      );
-
+      await ensurePushSubscription(currentUser || localStorage.getItem("userName") || "Personel");
       setNotificationPermission(getNotificationPermissionState());
       toast.success("Push bildirimleri etkinleştirildi");
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Bildirim izni alınamadı",
-      );
+      toast.error(error instanceof Error ? error.message : "Bildirim izni alınamadı");
     } finally {
       setNotificationRequesting(false);
     }
   };
 
   const notificationStatusLabel = {
-    granted: "Bildirimler aktif",
+    granted: "bildirimler aktif",
     denied: "Bildirim izni engellendi",
     default: "Bildirim izni bekleniyor",
     unsupported: "Bu cihazda desteklenmiyor",
@@ -613,515 +350,289 @@ const MainMenu = () => {
     window.location.href = "/login";
   };
 
-  if (splash) {
-    return <SplashScreen isVisible={splash} />;
-  }
+  if (splash) return <SplashScreen isVisible={splash} />;
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#070D18] text-foreground">
-      {/* Ambient background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -left-40 -top-40 h-[420px] w-[420px] rounded-full bg-primary/[0.08] blur-3xl" />
-        <div className="absolute right-[-160px] top-[10%] h-[420px] w-[420px] rounded-full bg-cyan-400/[0.055] blur-3xl" />
-        <div className="absolute bottom-[-200px] left-[30%] h-[500px] w-[500px] rounded-full bg-primary/[0.035] blur-3xl" />
-      </div>
-
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#070D18]/85 backdrop-blur-xl">
-        <div className="mx-auto flex h-[76px] max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/25 bg-primary/[0.08] text-primary shadow-lg shadow-primary/[0.08]">
-              <Plane className="h-5 w-5" />
-            </div>
-
-            <div className="min-w-0">
-              <h1 className="truncate font-heading text-base font-semibold tracking-tight sm:text-lg">
-                Operasyon Merkezi
-              </h1>
-              <p className="hidden truncate text-[11px] text-muted-foreground sm:block">
-                Çelebi Hava Servisi • {nowLabel}
-              </p>
-            </div>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.18),transparent_34%),radial-gradient(circle_at_top_right,hsl(176_60%_35%/0.2),transparent_26%),hsl(var(--background))]">
+      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-30">
+        <div className="container h-14 px-4 flex items-center justify-between">
+          <div>
+            <h1 className="font-heading font-semibold text-lg">Operasyon Merkezi</h1>
+            <p className="hidden text-xs text-muted-foreground sm:block">{nowLabel}</p>
           </div>
-
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-2">
             {isAdminUser && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate("/admin")}
-                title="Admin Menüsü"
-                className="h-10 w-10 rounded-xl text-muted-foreground hover:bg-white/[0.05] hover:text-foreground"
-              >
-                <Shield className="h-[18px] w-[18px]" />
+              <Button variant="outline" size="sm" onClick={() => navigate("/admin")} className="gap-1.5">
+                <Shield className="w-4 h-4" />
+                <span className="hidden sm:inline">Admin Menüsü</span>
               </Button>
             )}
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/settings")}
-              title="Ayarlar"
-              className="h-10 w-10 rounded-xl text-muted-foreground hover:bg-white/[0.05] hover:text-foreground"
-            >
-              <Settings className="h-[18px] w-[18px]" />
+            <Button variant="outline" size="sm" onClick={() => navigate("/settings")} className="gap-1.5">
+              <Settings className="w-4 h-4" />
+              <span className="hidden sm:inline">Ayarlar</span>
             </Button>
-
-            <div className="mx-1 hidden h-6 w-px bg-white/[0.08] sm:block" />
-
-            <span className="hidden max-w-[150px] truncate text-sm text-muted-foreground md:block">
-              {currentUser}
-            </span>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleLogout}
-              title="Çıkış Yap"
-              className="h-10 w-10 rounded-xl text-muted-foreground hover:bg-rose-500/10 hover:text-rose-300"
-            >
-              <LogOut className="h-[18px] w-[18px]" />
+            <span className="text-sm text-muted-foreground hidden sm:inline">{currentUser}</span>
+            <Button variant="ghost" size="sm" onClick={handleLogout} title="Cikis Yap">
+              <LogOut className="w-4 h-4" />
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto max-w-[1440px] space-y-6 px-4 py-5 pb-28 sm:px-6 sm:py-7 lg:px-8">
-        {/* Hero */}
-        <section className="relative overflow-hidden rounded-[28px] border border-primary/20 bg-[linear-gradient(135deg,#101a2a_0%,#0c1523_50%,#09111e_100%)] shadow-2xl shadow-black/20">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_35%,hsl(var(--primary)/0.16),transparent_32%),radial-gradient(circle_at_15%_90%,hsl(180_80%_50%/0.06),transparent_28%)]" />
-
-          {/* Decorative airport scene */}
-          <div className="pointer-events-none absolute right-[-10%] top-0 hidden h-full w-[55%] overflow-hidden lg:block">
-            <div className="absolute right-[12%] top-[14%] h-[1px] w-[62%] rotate-[-8deg] bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
-            <div className="absolute right-[4%] top-[27%] h-[1px] w-[48%] rotate-[8deg] bg-gradient-to-r from-transparent via-cyan-300/20 to-transparent" />
-            <div className="absolute bottom-[-30%] right-[-4%] h-[85%] w-[70%] rotate-[-18deg] rounded-[50%] border border-white/[0.04] bg-white/[0.015]" />
-            <div className="absolute bottom-[18%] right-[18%] h-[2px] w-[52%] rotate-[-18deg] bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
-            <div className="absolute right-[22%] top-[30%] flex h-24 w-24 rotate-[-10deg] items-center justify-center rounded-full border border-primary/10 bg-primary/[0.035]">
-              <Plane className="h-12 w-12 text-primary/30" />
-            </div>
-            <div className="absolute right-[8%] top-[12%] h-2 w-2 rounded-full bg-cyan-300/70 shadow-[0_0_18px_hsl(180_80%_60%/0.7)]" />
-            <div className="absolute right-[31%] top-[55%] h-1.5 w-1.5 rounded-full bg-primary/80 shadow-[0_0_16px_hsl(var(--primary)/0.8)]" />
-          </div>
-
-          <div className="relative grid min-h-[330px] gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_0.8fr] lg:p-10">
-            <div className="flex flex-col justify-center">
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/25 bg-primary/[0.07] px-3.5 py-1.5 text-xs font-medium text-primary">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-                </span>
-                Canlı Operasyon Merkezi
-              </div>
-
-              <div className="mt-5 max-w-[700px]">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-                  Hoş geldin{currentUser ? `, ${currentUser}` : ""}
-                </p>
-
-                <h2 className="font-heading text-[clamp(2.2rem,5vw,4.5rem)] font-semibold leading-[0.98] tracking-[-0.04em] text-slate-50">
-                  Saha operasyonlarını{" "}
-                  <span className="text-primary">tek merkezden</span> yönetin.
-                </h2>
-
-                <p className="mt-5 max-w-xl text-sm leading-6 text-slate-400 sm:text-base">
-                  Aktif hizmetler, uçuşlar, ekipmanlar ve vardiyaları tek ekrandan
-                  takip edin. Operasyonun nabzı burada.
-                </p>
-              </div>
-
-              <div className="mt-7 flex flex-wrap gap-3">
-                <Button
-                  onClick={() => navigate("/wheelchair-services")}
-                  className="h-12 rounded-xl bg-primary px-5 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90"
-                >
-                  Hizmetlere Git
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-
-                <div className="flex h-12 items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] px-4 text-xs font-medium text-emerald-300">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.7)]" />
-                  Sistem Aktif
-                </div>
-              </div>
-            </div>
-
-            <div className="relative hidden lg:flex lg:items-end lg:justify-end">
-              <div className="w-full max-w-[410px] rounded-3xl border border-white/[0.08] bg-black/[0.18] p-5 backdrop-blur-sm">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-                      Operasyon Durumu
-                    </p>
-                    <p className="mt-1 font-heading text-lg font-semibold">
-                      Antalya Havalimanı
+      <main className="container px-4 py-6 space-y-5">
+        <section className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+          <Card className="overflow-hidden border-primary/20 bg-[linear-gradient(135deg,hsl(var(--card))_0%,hsl(var(--card))_45%,hsl(var(--primary)/0.12)_100%)] shadow-lg shadow-primary/5">
+            <CardContent className="p-0">
+              <div className="grid gap-6 p-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+                <div className="space-y-4">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs text-primary">
+                    <Briefcase className="h-3.5 w-3.5" />
+                    Canlı Operasyon Merkezi
+                  </div>
+                  <div className="space-y-2">
+                    <h2 className="font-heading text-3xl leading-tight sm:text-4xl">Saha operasyonlarını tek merkezden yönetin.</h2>
+                    <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
+                      Aktif hizmet bildirimleri ve vardiya yönetimi ile eksik ekipman ve bildirim hizmeti ile kolaylık sağlar.
                     </p>
                   </div>
-                  <Activity className="h-5 w-5 text-cyan-300" />
-                </div>
-
-                <div className="mt-5 grid grid-cols-3 gap-2">
-                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-3">
-                    <p className="text-[9px] uppercase tracking-wider text-slate-500">Vardiya</p>
-                    <p className="mt-1 font-heading text-xl font-semibold text-cyan-300">
-                      {activeScheduleCount}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-3">
-                    <p className="text-[9px] uppercase tracking-wider text-slate-500">Hizmet</p>
-                    <p className="mt-1 font-heading text-xl font-semibold text-primary">
-                      {summaryLoading ? "—" : dashboardSummary.activeServices}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-3">
-                    <p className="text-[9px] uppercase tracking-wider text-slate-500">Uçuş</p>
-                    <p className="mt-1 font-heading text-xl font-semibold text-emerald-300">
-                      {summaryLoading ? "—" : totalFlights}
-                    </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button className="gap-2" onClick={() => navigate("/wheelchair-services")}>
+                      Hizmetlere Git
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                    <Button variant="secondary" className="gap-2" onClick={() => navigate("/wheelchair-system")}>
+                      <Accessibility className="h-4 w-4" />
+                      Sandalye takibi
+                    </Button>
+                    <Button variant="outline" className="gap-2" onClick={() => navigate("/work-schedule")}>
+                      <CalendarDays className="h-4 w-4" />
+                      Vardiya Planı
+                    </Button>
+                    <Button variant="outline" className="gap-2" onClick={() => navigate("/flights")}>
+                      <Plane className="h-4 w-4" />
+                      Uçuşlar
+                    </Button>
+                    <Button variant="outline" className="gap-2" onClick={() => navigate("/directory")}>
+                      <Phone className="h-4 w-4" />
+                      Çelebi Rehber
+                    </Button>
+                    {hasSpecialAccess && (
+                      <Button variant="outline" className="gap-2 border-amber-500/40 text-amber-300 hover:bg-amber-500/10" onClick={() => navigate("/chef-daily") }>
+                        <Star className="h-4 w-4" />
+                        Chef-Daily
+                      </Button>
+                    )}
+                    {hasTeslimUserAccess && (
+                      <Button variant="outline" className="gap-2 border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10" onClick={() => navigate("/teslim")}>
+                        <ClipboardCheck className="h-4 w-4" />
+                        Teslim Operasyonu
+                      </Button>
+                    )}
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-center gap-2 border-t border-white/[0.06] pt-4 text-xs text-slate-400">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                  Operasyon sistemleri çalışıyor
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-background/60 p-4 backdrop-blur-sm">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Verilen Hizmet</p>
+                    <p className="mt-2 font-heading text-4xl text-primary">{summaryLoading ? "..." : dashboardSummary.activeServices}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Bugüne kadar verdiğimiz hizmet</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-background/60 p-4 backdrop-blur-sm">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Aktif Vardiya</p>
+                    <p className="mt-2 font-heading text-4xl text-cyan-300">{activeScheduleCount}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Sahada çalışan ekip sayısı</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-background/60 p-4 backdrop-blur-sm">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Eksik Sandalye</p>
+                    <p className="mt-2 font-heading text-4xl text-rose-300">{summaryLoading ? "..." : dashboardSummary.missingWheelchairs}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Müdahale gerektiren ekipman</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-background/60 p-4 backdrop-blur-sm">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Günlük Uçuş</p>
+                    <p className="mt-2 font-heading text-4xl text-emerald-300">{summaryLoading ? "..." : totalFlights}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {summaryLoading
+                        ? "Gelen ve giden uçaklar hesaplanıyor"
+                        : `Gelen ${dashboardSummary.arrivalFlights} • Giden ${dashboardSummary.departureFlights}`}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Quick actions */}
-        <section>
-          <div className="mb-3 flex items-end justify-between">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-primary">
-                Hızlı Erişim
-              </p>
-              <h3 className="mt-1 font-heading text-xl font-semibold">
-                Operasyonlar
-              </h3>
-            </div>
-            <p className="hidden text-xs text-muted-foreground sm:block">
-              Sık kullanılan işlemler
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <QuickAction
-              icon={<Accessibility className="h-5 w-5" />}
-              title="Sandalye Takibi"
-              description="Durum, konum ve ekipman takibi"
-              accent="blue"
-              onClick={() => navigate("/wheelchair-system")}
-            />
-
-            <QuickAction
-              icon={<CalendarDays className="h-5 w-5" />}
-              title="Vardiya Planı"
-              description="Anlık ekip ve vardiya programı"
-              accent="neutral"
-              onClick={() => navigate("/work-schedule")}
-            />
-
-            <QuickAction
-              icon={<Plane className="h-5 w-5" />}
-              title="Uçuşlar"
-              description="Gelen ve giden uçuş bilgileri"
-              accent="neutral"
-              onClick={() => navigate("/flights")}
-            />
-
-            <QuickAction
-              icon={<Phone className="h-5 w-5" />}
-              title="Çelebi Rehber"
-              description="Ekip ve iletişim bilgileri"
-              accent="neutral"
-              onClick={() => navigate("/directory")}
-            />
-
-            {hasTeslimUserAccess && (
-              <QuickAction
-                icon={<ClipboardCheck className="h-5 w-5" />}
-                title="Teslim Operasyonu"
-                description="Teslim süreçlerini yönet"
-                accent="cyan"
-                badge="Özel"
-                onClick={() => navigate("/teslim")}
-              />
-            )}
-
-            {hasSpecialAccess && (
-              <QuickAction
-                icon={<Star className="h-5 w-5" />}
-                title="Chef-Daily"
-                description="Departure kontrol paneli"
-                accent="amber"
-                badge="Özel"
-                onClick={() => navigate("/chef-daily")}
-              />
-            )}
-          </div>
-        </section>
-
-        {/* Stats */}
-        <section className="overflow-hidden rounded-[26px] border border-white/[0.07] bg-[#0a1220]/75 p-4 sm:p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">
-                Canlı Veriler
-              </p>
-              <h3 className="mt-1 font-heading text-xl font-semibold">
-                Operasyon Özeti
-              </h3>
-            </div>
-
-            <div className="flex items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.025] px-3 py-1.5 text-[10px] text-slate-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              Canlı
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              icon={<Users className="h-5 w-5" />}
-              label="Aktif Vardiya"
-              value={activeScheduleCount}
-              description="Şu anda sahada çalışan ekip"
-              tone="cyan"
-            />
-
-            <StatCard
-              icon={<CheckCircle2 className="h-5 w-5" />}
-              label="Verilen Hizmet"
-              value={dashboardSummary.activeServices}
-              description="Kayıtlardaki toplam hizmet"
-              tone="blue"
-              loading={summaryLoading}
-            />
-
-            <StatCard
-              icon={<AlertTriangle className="h-5 w-5" />}
-              label="Eksik Sandalye"
-              value={dashboardSummary.missingWheelchairs}
-              description="Müdahale gerektiren ekipman"
-              tone="red"
-              loading={summaryLoading}
-            />
-
-            <StatCard
-              icon={<Plane className="h-5 w-5" />}
-              label="Günlük Uçuş"
-              value={totalFlights}
-              description={`Gelen ${dashboardSummary.arrivalFlights} • Giden ${dashboardSummary.departureFlights}`}
-              tone="green"
-              loading={summaryLoading}
-            />
-          </div>
-        </section>
-
-        {/* Notification */}
-        <section className="rounded-[24px] border border-primary/15 bg-[linear-gradient(110deg,#0c1727,#0b1421)] p-4 sm:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-start gap-4">
-              <div
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
-                  notificationPermission === "granted"
-                    ? "bg-emerald-400/10 text-emerald-300"
-                    : "bg-primary/10 text-primary"
-                }`}
-              >
-                {notificationPermission === "granted" ? (
-                  <CheckCircle2 className="h-5 w-5" />
-                ) : (
-                  <Bell className="h-5 w-5" />
-                )}
-              </div>
-
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-heading font-semibold">Operasyon Bildirimleri</h3>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${
-                      notificationPermission === "granted"
-                        ? "bg-emerald-400/10 text-emerald-300"
-                        : "bg-white/[0.05] text-slate-400"
-                    }`}
-                  >
-                    {notificationStatusLabel}
-                  </span>
-                </div>
-
-                <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-                  {needsInstalledPwa
-                    ? "iPhone/iPad tarafında arka plan bildirimi için uygulamayı Ana Ekrana Ekle ile kurup oradan açın."
-                    : "Hizmet bildirimlerini bu cihazda arka planda da alabilmek için push bildirimlerini etkinleştirin."}
-                </p>
-              </div>
-            </div>
-
-            <Button
-              onClick={handleNotificationPermission}
-              disabled={
-                notificationRequesting ||
-                notificationPermission === "granted" ||
-                notificationPermission === "denied" ||
-                notificationPermission === "unsupported"
-              }
-              variant={notificationPermission === "granted" ? "secondary" : "default"}
-              className="h-11 shrink-0 rounded-xl"
-            >
-              {notificationPermission === "granted"
-                ? "Push Aktif"
-                : notificationRequesting
-                  ? "Aktifleştiriliyor..."
-                  : "Bildirimleri Aç"}
-            </Button>
-          </div>
-        </section>
-
-        {/* Briefings + news */}
-        <section className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
-          <Card className="overflow-hidden rounded-[24px] border-white/[0.07] bg-[#0b1422]/75">
-            <CardHeader className="border-b border-white/[0.06] px-5 py-4">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Megaphone className="h-4 w-4 text-primary" />
-                Haftalık Duyuru
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Ekip içi brifingler ve operasyon duyuruları.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="p-4">
-              {briefings.length > 0 ? (
-                <div className="space-y-2">
-                  {briefings.map((item, index) => (
-                    <div
-                      key={`${item}-${index}`}
-                      className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 transition-colors hover:border-primary/20 hover:bg-primary/[0.025]"
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
-                          {index + 1}
-                        </span>
-                        <span className="text-xs leading-5 text-slate-300">
-                          {item}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-white/[0.08] p-5 text-center text-xs text-muted-foreground">
-                  Henüz yayınlanmış bir duyuru bulunmuyor.
-                </div>
-              )}
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden rounded-[24px] border-white/[0.07] bg-[#0b1422]/75">
-            <CardHeader className="border-b border-white/[0.06] px-5 py-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Newspaper className="h-4 w-4 text-primary" />
-                    Çelebi Haberleri
-                  </CardTitle>
-                  <CardDescription className="mt-1 text-xs">
-                    Son kurumsal haberler ve operasyon gündemi.
-                  </CardDescription>
-                </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  asChild
-                  className="h-8 rounded-lg border-white/[0.08] bg-white/[0.02] text-xs"
-                >
-                  <a
-                    href={CELEBI_NEWS_SOURCE_URL}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Tüm Haberler
-                    <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
-                  </a>
-                </Button>
-              </div>
+          <Card className="border-primary/20 bg-card/80 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="w-5 h-5 text-primary" />
+                Bildirimleri Açın
+              </CardTitle>
+              <CardDescription>
+                {needsInstalledPwa
+                  ? "iPhone/iPad tarafında arka plan bildirimi için uygulamayı Ana Ekrana Ekle ile kurup oradan açın."
+                  : "Gerçek arka plan bildirimleri için bu cihazı web push aboneliğine ekleyin."}
+              </CardDescription>
             </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-xl border border-border bg-secondary/40 p-4">
+                <p className="text-sm font-medium">{notificationStatusLabel}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {needsInstalledPwa
+                    ? "Safari sekmesi yerine ana ekrana eklenmiş uygulama açıkken izin verin; aksi halde arka plan push gelmez."
+                    : "Abonelik açıldıktan sonra hizmet bildirimleri uygulama arka plandayken de bu cihaza gönderilir."}
+                </p>
+              </div>
+              <Button className="w-full" onClick={handleNotificationPermission} disabled={notificationRequesting || notificationPermission === "granted" || notificationPermission === "denied" || notificationPermission === "unsupported"}>
+                {notificationPermission === "granted"
+                  ? "Push Aktif"
+                  : notificationRequesting
+                    ? "Abonelik Açılıyor..."
+                    : "Push Bildirimlerini Aç"}
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
 
-            <CardContent className="p-4">
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <Card className="border-border/80 bg-card/70 transition-colors hover:border-primary/40">
+            <CardContent className="flex items-center justify-between p-4">
+              <div className="flex-1">
+                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Operasyon</p>
+                <p className="mt-2 font-heading text-2xl">Hizmetler</p>
+                <p className="mt-1 text-xs text-muted-foreground">Uçuşlar için hizmet bilgisi oluştur</p>
+              </div>
+              <Button size="sm" className="shrink-0" onClick={() => navigate("/wheelchair-services")}>Aç</Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/80 bg-card/70 transition-colors hover:border-primary/40">
+            <CardContent className="flex items-center justify-between p-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Envanter</p>
+                <p className="mt-2 font-heading text-2xl">Sandalyeler</p>
+                <p className="mt-1 text-xs text-muted-foreground">Durum, konum ve bakım takibi</p>
+              </div>
+              <Button size="sm" variant="secondary" className="shrink-0" onClick={() => navigate("/wheelchair-system")}>Aç</Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/80 bg-card/70 transition-colors hover:border-primary/40">
+            <CardContent className="flex items-center justify-between p-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Vardiya</p>
+                <p className="mt-2 font-heading text-2xl">Program</p>
+                <p className="mt-1 text-xs text-muted-foreground">Anlık ekip ve vardiya takibi</p>
+              </div>
+              <Button size="sm" variant="secondary" className="shrink-0" onClick={() => navigate("/work-schedule")}>Aç</Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/80 bg-card/70 transition-colors hover:border-primary/40">
+            <CardContent className="flex items-center justify-between p-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Uçuş</p>
+                <p className="mt-2 font-heading text-2xl">Uçuşlar</p>
+                <p className="mt-1 text-xs text-muted-foreground">Uçuş listeleri ve park bilgileri</p>
+              </div>
+              <Button size="sm" variant="secondary" className="shrink-0" onClick={() => navigate("/flights")}>Aç</Button>
+            </CardContent>
+          </Card>
+
+          {hasSpecialAccess && (
+            <Card className="border-amber-500/30 bg-[linear-gradient(135deg,hsl(var(--card))_0%,hsl(42_85%_65%/0.12)_100%)] transition-colors hover:border-amber-400/60">
+              <CardContent className="flex items-center justify-between p-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-amber-300/80">Ozel</p>
+                  <p className="mt-2 font-heading text-2xl">Chef-Daily</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Departure kontrol paneli</p>
+                </div>
+                <Button size="sm" variant="secondary" className="shrink-0" onClick={() => navigate("/chef-daily")}>Aç</Button>
+              </CardContent>
+            </Card>
+          )}
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+          <Card className="border-border/80 bg-card/80 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Megaphone className="w-5 h-5 text-primary" />
+                Haftalık Duyuru Panosu
+              </CardTitle>
+              <CardDescription>Haftalık brifingler ve ekip içi duyurular.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {briefings.map((item, index) => (
+                  <div key={item} className="rounded-xl border border-border bg-secondary/30 px-3 py-3 text-sm">
+                    <div className="flex items-start gap-3">
+                      <span className="mt-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/15 px-1 text-[11px] text-primary">{index + 1}</span>
+                      <span className="leading-6">{item}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/80 bg-card/80 backdrop-blur-sm">
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1.5">
+                <CardTitle className="flex items-center gap-2">
+                  <Newspaper className="w-5 h-5 text-primary" />
+                  Çelebi Haberleri
+                </CardTitle>
+                <CardDescription>Son kurumsal haberler ve dış operasyon gündemi.</CardDescription>
+              </div>
+
+              <Button variant="outline" size="sm" asChild>
+                <a href={CELEBI_NEWS_SOURCE_URL} target="_blank" rel="noreferrer">
+                  Tüm Haberler
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </Button>
+            </CardHeader>
+            <CardContent>
               {newsLoading ? (
-                <div className="flex items-center gap-2 rounded-xl border border-white/[0.06] p-5 text-xs text-muted-foreground">
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                  Haberler yükleniyor...
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Haberler yükleniyor...
+                  </div>
                 </div>
               ) : newsError ? (
-                <div className="rounded-xl border border-white/[0.06] p-5">
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    {newsError}
-                  </p>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    asChild
-                    className="mt-3 h-9 rounded-lg text-xs"
-                  >
-                    <a
-                      href={CELEBI_NEWS_SOURCE_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
+                <div className="rounded-md border border-border px-3 py-4 text-sm text-muted-foreground space-y-3">
+                  <p>{newsError}</p>
+                  <Button variant="secondary" size="sm" asChild>
+                    <a href={CELEBI_NEWS_SOURCE_URL} target="_blank" rel="noreferrer">
                       Haber Sayfasını Aç
                     </a>
                   </Button>
                 </div>
-              ) : newsItems.length > 0 ? (
-                <div className="grid gap-2.5 sm:grid-cols-2">
+              ) : (
+                <div className="grid gap-3 lg:grid-cols-2">
                   {newsItems.map((item) => (
                     <a
                       key={item.url}
                       href={item.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 transition-all hover:border-primary/25 hover:bg-primary/[0.025]"
+                      className="rounded-lg border border-border p-4 transition-colors hover:border-primary/40 hover:bg-accent/30"
                     >
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/[0.08] text-primary">
-                          <Newspaper className="h-4 w-4" />
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-2">
+                          <p className="font-medium leading-snug">{item.title}</p>
+                          <p className="text-sm text-muted-foreground leading-6">{item.summary}</p>
                         </div>
-
-                        <div className="min-w-0 flex-1">
-                          <p className="line-clamp-2 text-xs font-semibold leading-5 text-slate-200">
-                            {item.title}
-                          </p>
-                          <p className="mt-1.5 line-clamp-3 text-[11px] leading-5 text-muted-foreground">
-                            {item.summary}
-                          </p>
-                        </div>
-
-                        <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                        <ExternalLink className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                       </div>
                     </a>
                   ))}
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-white/[0.08] p-5 text-center text-xs text-muted-foreground">
-                  Haber bulunamadı.
                 </div>
               )}
             </CardContent>
           </Card>
         </section>
-
-        {/* Footer status */}
-        <div className="flex flex-col gap-2 border-t border-white/[0.06] pt-4 text-[10px] text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-          <span>Operasyon Merkezi • {nowLabel}</span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            Sistem bağlantısı aktif
-          </span>
-        </div>
       </main>
     </div>
   );
