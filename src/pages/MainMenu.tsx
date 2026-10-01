@@ -15,6 +15,7 @@ import { getStoredSchedulePayload, loadSchedulePayload, type SchedulePayload, WO
 import { hasSpecialMemberAccess } from "@/lib/special-member";
 import { hasTeslimAccess } from "@/lib/teslim-access";
 import { toast } from "sonner";
+import menuBackground from "../../arkaplanmenu.avif";
 
 type DashboardSummary = {
   activeServices: number;
@@ -492,19 +493,15 @@ const MainMenu = () => {
       </header>
 
       <main className="relative z-10 mx-auto max-w-[1440px] space-y-6 px-4 py-5 pb-28 sm:px-6 sm:py-7 lg:px-8">
-        <section className="relative overflow-hidden rounded-[28px] border border-primary/20 bg-[linear-gradient(135deg,#101a2a_0%,#0c1523_50%,#09111e_100%)] shadow-2xl shadow-black/20">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_35%,hsl(var(--primary)/0.16),transparent_32%),radial-gradient(circle_at_15%_90%,hsl(180_80%_50%/0.06),transparent_28%)]" />
-          <div className="pointer-events-none absolute right-[-10%] top-0 hidden h-full w-[55%] overflow-hidden lg:block" aria-hidden="true">
-            <div className="absolute right-[12%] top-[14%] h-[1px] w-[62%] rotate-[-8deg] bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
-            <div className="absolute right-[4%] top-[27%] h-[1px] w-[48%] rotate-[8deg] bg-gradient-to-r from-transparent via-cyan-300/20 to-transparent" />
-            <div className="absolute bottom-[-30%] right-[-4%] h-[85%] w-[70%] rotate-[-18deg] rounded-[50%] border border-white/[0.04] bg-white/[0.015]" />
-            <div className="absolute bottom-[18%] right-[18%] h-[2px] w-[52%] rotate-[-18deg] bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
-            <div className="absolute right-[22%] top-[30%] flex h-24 w-24 rotate-[-10deg] items-center justify-center rounded-full border border-primary/10 bg-primary/[0.035]">
-              <Plane className="h-12 w-12 text-primary/30" />
-            </div>
-            <div className="absolute right-[8%] top-[12%] h-2 w-2 rounded-full bg-cyan-300/70 shadow-[0_0_18px_hsl(180_80%_60%/0.7)]" />
-            <div className="absolute right-[31%] top-[55%] h-1.5 w-1.5 rounded-full bg-primary/80 shadow-[0_0_16px_hsl(var(--primary)/0.8)]" />
-          </div>
+        <section className="relative isolate overflow-hidden rounded-[28px] border border-primary/20 bg-[#09111e] shadow-2xl shadow-black/20">
+          <img
+            src={menuBackground}
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center opacity-45"
+          />
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(7,13,24,0.96)_0%,rgba(7,13,24,0.82)_48%,rgba(7,13,24,0.55)_100%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_80%_35%,hsl(var(--primary)/0.2),transparent_36%),linear-gradient(0deg,rgba(7,13,24,0.28),transparent_55%)]" />
 
           <div className="relative grid min-h-[330px] gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_0.8fr] lg:p-10">
             <div className="flex flex-col justify-center">
@@ -538,7 +535,7 @@ const MainMenu = () => {
             </div>
 
             <div className="relative hidden lg:flex lg:items-end lg:justify-end">
-              <div className="w-full max-w-[410px] rounded-3xl border border-white/[0.08] bg-black/[0.18] p-5 backdrop-blur-sm">
+              <div className="w-full max-w-[410px] rounded-3xl border border-white/[0.12] bg-[#07101d]/55 p-5 shadow-xl shadow-black/10 backdrop-blur-md">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Operasyon Durumu</p>
