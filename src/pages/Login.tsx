@@ -310,6 +310,15 @@ const Login = () => {
 
       setFoundUser((prev) => (prev ? { ...prev, notification_enabled: true } : prev));
       setStep("existing-security-number");
+    } catch (error) {
+      console.error("Notification setup failed:", error);
+
+      if ("Notification" in window && Notification.permission === "denied") {
+        toast.error("Bildirim izni tarayıcıda engellenmiş. Site ayarlarından bildirimlere izin verin, sayfayı yenileyin ve tekrar deneyin.");
+        return;
+      }
+
+      toast.error(error instanceof Error ? error.message : "Bildirim ayarı tamamlanamadı. Lütfen tekrar deneyin.");
     } finally {
       setLoading(false);
     }
@@ -610,6 +619,9 @@ const Login = () => {
                     />
                     KVKK aydinlatma metnini okudum, kabul ediyorum.
                   </label>
+                  <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                    İzin isteğini reddederseniz bu butona yeniden basarak tekrar deneyebilirsiniz. Tarayıcıda engellediyseniz önce bu site için bildirim iznini tarayıcı ayarlarından açıp sayfayı yenileyin.
+                  </p>
                 </div>
 
                 <Button type="submit" disabled={loading || !kvkkAccepted} className="h-11 w-full rounded-xl text-sm font-medium">
@@ -705,4 +717,3 @@ const Login = () => {
 };
 
 export default Login;
-
