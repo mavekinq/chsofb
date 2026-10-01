@@ -9,6 +9,7 @@ import OfflineStatusBanner from "@/components/OfflineStatusBanner";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import Login from "./pages/Login.tsx";
 import AdminControlPage from "./pages/AdminControlPage.tsx";
+import MainMenu from "./pages/MainMenu.tsx";
 import MainTestMenu from "./pages/maintest.tsx";
 import Index from "./pages/Index.tsx";
 import FlightsPage from "./pages/FlightsPage.tsx";
@@ -37,7 +38,7 @@ const App = () => (
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/admin" element={<AdminControlPage />} />
-          <Route path="/" element={<MainTestMenu />} />
+          <Route path="/" element={<MainMenu />} />
           <Route path="/maintest" element={<MainTestMenu />} />
           <Route path="/wheelchair-system" element={<Index />} />
           <Route path="/flights" element={<FlightsPage />} />
