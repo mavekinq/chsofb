@@ -1,5 +1,9 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
+import {
+  getEligiblePushSubscriptions,
+  getSubscriptionsWithServiceAlertsEnabled,
+} from "../_shared/push-targeting.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,8 +26,8 @@ type ServicePushPayload = {
   custom_body?: string;
   custom_url?: string;
   custom_tag?: string;
-  // If provided, only send to users whose name is in this list (on-shift filter)
-  // Announcements are always sent to all users regardless of this field
+  // When provided, only matching users receive the push; an empty list targets nobody.
+  // Announcements are always sent to all users regardless of this field.
   on_shift_users?: string[];
 };
 
@@ -140,13 +144,39 @@ Deno.serve(async (request) => {
 
     const allSubscriptions = (subscriptions || []) as PushSubscriptionRow[];
 
-    // Filter to on-shift users only (unless this is an announcement)
-    const isAnnouncement = isAnnouncementPayload(service);
-    const eligibleSubscriptions = (!isAnnouncement && service.on_shift_users && service.on_shift_users.length > 0)
-      ? allSubscriptions.filter((sub) => service.on_shift_users!.some(
-          (shiftUser) => shiftUser.trim().toLowerCase() === sub.user_name.trim().toLowerCase()
-        ))
-      : allSubscriptions;
+    let schedulePayload: unknown = null;
+    let serviceAlertPreferences: Array<{ full_name: string; service_alerts_enabled: boolean }> = [];
+    if (!isAnnouncementPayload(service)) {
+      const [
+        { data: scheduleRow, error: scheduleError },
+        { data: preferences, error: preferencesError },
+      ] = await Promise.all([
+        supabaseAdmin
+          .from("work_schedule_state")
+          .select("payload")
+          .eq("id", "global")
+          .maybeSingle(),
+        supabaseAdmin
+          .from("users")
+          .select("full_name, service_alerts_enabled"),
+      ]);
+
+      if (scheduleError) throw scheduleError;
+      if (preferencesError) throw preferencesError;
+      schedulePayload = scheduleRow?.payload ?? null;
+      serviceAlertPreferences = preferences || [];
+    }
+
+    const eligibleSubscriptions = getEligiblePushSubscriptions(
+      getSubscriptionsWithServiceAlertsEnabled(
+        allSubscriptions,
+        serviceAlertPreferences,
+        service.notification_kind,
+      ),
+      service.notification_kind,
+      service.on_shift_users,
+      schedulePayload,
+    );
 
     const payload = JSON.stringify({
       title: buildNotificationTitle(service),

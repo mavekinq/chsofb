@@ -105,14 +105,17 @@ export const getFlightCodeMatchKeys = (value: string) => {
   const prefixMatch = normalized.match(/^([A-Z0-9]*[A-Z])(\d+)$/);
   const prefix = prefixMatch?.[1] || "";
   const numberPart = prefixMatch?.[2] || normalized;
+  const canonicalNumber = numberPart.replace(/^0+(?=\d)/, "");
 
   if (numberPart) {
     keys.add(numberPart);
+    keys.add(canonicalNumber);
   }
 
   if (prefix && numberPart) {
     (FLIGHT_CODE_ALIASES[prefix] || []).forEach((alias) => {
       keys.add(`${alias}${numberPart}`);
+      keys.add(`${alias}${canonicalNumber}`);
     });
   }
 

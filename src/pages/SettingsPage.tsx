@@ -20,6 +20,7 @@ type StoredStaffUser = {
   full_name: string;
   security_number: string;
   notification_enabled: boolean;
+  service_alerts_enabled?: boolean;
   updated_at: string;
 };
 
@@ -28,6 +29,7 @@ type AuthUserRecord = {
   full_name: string;
   security_number: string;
   notification_enabled: boolean;
+  service_alerts_enabled: boolean;
 };
 
 const LOCAL_USERS_KEY = "staffAuthUsers";
@@ -90,7 +92,7 @@ const SettingsPage = () => {
 
       const { data: users, error } = await supabase
         .from("users")
-        .select("id, full_name, security_number, notification_enabled")
+        .select("id, full_name, security_number, notification_enabled, service_alerts_enabled")
         .eq("full_name", storedUserName)
         .limit(1);
 
@@ -103,6 +105,10 @@ const SettingsPage = () => {
             setFullName(localUser.full_name);
             setSecurityNumber(localUser.security_number || "");
             setNotificationEnabled(Boolean(localUser.notification_enabled));
+            setPreferences((prev) => ({
+              ...prev,
+              serviceAlertsEnabled: localUser.service_alerts_enabled ?? prev.serviceAlertsEnabled,
+            }));
           }
           setLoading(false);
           return;
@@ -119,6 +125,7 @@ const SettingsPage = () => {
         setFullName(dbUser.full_name);
         setSecurityNumber(dbUser.security_number || "");
         setNotificationEnabled(Boolean(dbUser.notification_enabled));
+        setPreferences((prev) => ({ ...prev, serviceAlertsEnabled: dbUser.service_alerts_enabled }));
       }
 
       setLoading(false);
@@ -155,6 +162,7 @@ const SettingsPage = () => {
             full_name: nextFullName,
             security_number: nextSecurityNumber,
             notification_enabled: notificationEnabled,
+            service_alerts_enabled: preferences.serviceAlertsEnabled,
             updated_at: new Date().toISOString(),
           };
         });
@@ -163,6 +171,7 @@ const SettingsPage = () => {
         const payload = {
           security_number: nextSecurityNumber || null,
           notification_enabled: notificationEnabled,
+          service_alerts_enabled: preferences.serviceAlertsEnabled,
           updated_at: new Date().toISOString(),
         };
 

@@ -1,0 +1,2 @@
+ALTER TABLE public.users
+ADD COLUMN IF NOT EXISTS service_alerts_enabled BOOLEAN NOT NULL DEFAULT TRUE;

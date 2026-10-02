@@ -60,7 +60,13 @@ interface AddServiceDialogProps {
   onOpenChange: (open: boolean) => void;
   flight: Flight | null;
   terminal: string;
-  onConfirm: (flight: Flight, wheelchairId: string, passengerType: string, notes: string, assignedStaff: string) => void;
+  onConfirm: (
+    flight: Flight,
+    wheelchairId: string,
+    passengerType: string,
+    notes: string,
+    assignedStaff: string,
+  ) => void;
   onServiceAdded?: () => void;
   formatFlightTime?: (flight: Flight) => string;
   getDisplayGate?: (flight: Flight | null) => string;
