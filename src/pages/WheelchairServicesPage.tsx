@@ -2,10 +2,11 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Clock, Plane, Users, MapPin, AlertTriangle, Plus, Trash2,
-  Search, RefreshCw, Accessibility, X, ChevronDown, ChevronUp,
-  MessageSquare, Pencil, Check,
+  Search, RefreshCw, Accessibility, Bell, X, ChevronDown, ChevronUp,
+  MessageSquare, Pencil, Check, ScanLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,7 +35,12 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { createFlightPlanPositionLookup, fetchFlightPlanEntriesMerged, fetchFlightPlanEntriesMergedWithWindow, getFlightCodeMatchKeys, getIstanbulDateKey, normalizeFlightCode } from "@/lib/flight-plan";
-import { isCounterClosedStatusText, triggerServicePushNotification } from "@/lib/notifications";
+import {
+  getNotificationPreferences,
+  isCounterClosedStatusText,
+  saveNotificationPreferences,
+  triggerServicePushNotification,
+} from "@/lib/notifications";
 import { readOfflineCache, saveOfflineCache } from "@/lib/offline-cache";
 import { getOnShiftOFBCount, getOnShiftUserNames } from "@/lib/work-schedule";
 import { triggerGoogleSheetsSync } from "@/lib/google-sheets-sync";
@@ -45,6 +51,7 @@ import { hasSpecialMemberAccess } from "@/lib/special-member";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import AddServiceDialog from "@/components/AddServiceDialog";
+import TicketPassengerDialog, { type TicketPassenger } from "@/components/TicketPassengerDialog";
 import { attachTavFlightGates } from "@/lib/tav-flight-details";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -142,7 +149,21 @@ interface WheelchairService {
   terminal: string;
   created_at: string;
   created_by: string;
+  passenger_name: string | null;
+  passenger_seat: string | null;
+  delivery_stage: DeliveryStage | null;
+  delivery_stage_updated_at: string | null;
+  delivery_stage_updated_by: string | null;
 }
+
+type DeliveryStage = "ready" | "gate" | "boarding" | "completed";
+
+const DELIVERY_STAGE_LABELS: Record<DeliveryStage, string> = {
+  ready: "Hazırlandı",
+  gate: "Gate'e bırakıldı",
+  boarding: "Boarding",
+  completed: "Tamamlandı",
+};
 
 type EditableServiceTarget = {
   id: string;
@@ -796,10 +817,16 @@ const WheelchairServicesPage = () => {
   const [activeTab, setActiveTab] = useState("T1");
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [showServiceDialog, setShowServiceDialog] = useState(false);
+  const [showTicketPassengerDialog, setShowTicketPassengerDialog] = useState(false);
   const [editingService, setEditingService] = useState<EditableServiceTarget | null>(null);
   const [wheelchairs, setWheelchairs] = useState<WheelchairInventory[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentUser, setCurrentUser] = useState("Personel");
+  const [serviceAlertsEnabled, setServiceAlertsEnabled] = useState(
+    () => getNotificationPreferences().serviceAlertsEnabled,
+  );
+  const [serviceAlertsPreferenceLoading, setServiceAlertsPreferenceLoading] = useState(true);
+  const [savingServiceAlertsPreference, setSavingServiceAlertsPreference] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; flightIata: string } | null>(null);
   const [expandedServices, setExpandedServices] = useState<Set<string>>(new Set());
@@ -902,6 +929,90 @@ const WheelchairServicesPage = () => {
   useEffect(() => {
     currentUserRef.current = currentUser;
   }, [currentUser]);
+
+  useEffect(() => {
+    const userName = localStorage.getItem("userName");
+    if (!userName) {
+      setServiceAlertsPreferenceLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    const loadPreference = async () => {
+      const { data, error } = await supabase
+        .from("users")
+        .select("service_alerts_enabled")
+        .eq("full_name", userName)
+        .maybeSingle();
+
+      if (!isMounted) return;
+
+      if (error) {
+        console.error("Service alert preference load failed:", error);
+        toast.error("Hizmet bildirimi tercihi yüklenemedi");
+      } else if (data) {
+        setServiceAlertsEnabled(data.service_alerts_enabled);
+        saveNotificationPreferences({
+          ...getNotificationPreferences(),
+          serviceAlertsEnabled: data.service_alerts_enabled,
+        });
+      }
+      setServiceAlertsPreferenceLoading(false);
+    };
+
+    void loadPreference();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleServiceAlertsChange = async (enabled: boolean) => {
+    const userName = localStorage.getItem("userName");
+    if (!userName) {
+      toast.error("Bildirim tercihi kaydedilemedi: kullanıcı bulunamadı");
+      return;
+    }
+
+    setSavingServiceAlertsPreference(true);
+    const previousEnabled = serviceAlertsEnabled;
+    const previousPreferences = getNotificationPreferences();
+    setServiceAlertsEnabled(enabled);
+    saveNotificationPreferences({
+      ...previousPreferences,
+      serviceAlertsEnabled: enabled,
+    });
+
+    try {
+      const { data: existingUser, error: lookupError } = await supabase
+        .from("users")
+        .select("id")
+        .eq("full_name", userName)
+        .maybeSingle();
+
+      if (lookupError) throw lookupError;
+
+      const preference = { service_alerts_enabled: enabled };
+      const { error: saveError } = existingUser
+        ? await supabase.from("users").update(preference).eq("id", existingUser.id)
+        : await supabase.from("users").insert({
+          ...preference,
+          full_name: userName,
+          is_admin: localStorage.getItem("userRole") === "admin",
+          security_number: localStorage.getItem("securityNumber"),
+        });
+
+      if (saveError) throw saveError;
+
+      toast.success(enabled ? "Hizmet bildirimleri açıldı" : "Hizmet bildirimleri kapatıldı");
+    } catch (error) {
+      setServiceAlertsEnabled(previousEnabled);
+      saveNotificationPreferences(previousPreferences);
+      console.error("Service alert preference save failed:", error);
+      toast.error("Hizmet bildirimi tercihi kaydedilemedi");
+    } finally {
+      setSavingServiceAlertsPreference(false);
+    }
+  };
 
   const resolveFlightTerminal = (flight: Flight) => {
     if (flight.dep_terminal === "T1" || flight.dep_terminal === "T2") return flight.dep_terminal;
@@ -1010,9 +1121,17 @@ const WheelchairServicesPage = () => {
     try {
       await Promise.all(candidates.map(async (service) => {
         const nextNotes = markServiceAsCompleted(service.notes);
+        const completedAt = new Date().toISOString();
         const { error } = await supabase
           .from("wheelchair_services")
-          .update({ notes: nextNotes })
+          .update({
+            notes: nextNotes,
+            ...(service.passenger_name ? {
+              delivery_stage: "completed",
+              delivery_stage_updated_at: completedAt,
+              delivery_stage_updated_by: currentUserRef.current,
+            } : {}),
+          })
           .eq("id", service.id);
 
         if (error) throw error;
@@ -1030,7 +1149,15 @@ const WheelchairServicesPage = () => {
       if (completedIds.size > 0) {
         setServices((prev) => prev.map((service) => {
           if (!completedIds.has(service.id)) return service;
-          return { ...service, notes: markServiceAsCompleted(service.notes) };
+          return {
+            ...service,
+            notes: markServiceAsCompleted(service.notes),
+            ...(service.passenger_name ? {
+              delivery_stage: "completed",
+              delivery_stage_updated_at: new Date().toISOString(),
+              delivery_stage_updated_by: currentUserRef.current,
+            } : {}),
+          };
         }));
 
         void syncSheetsData().catch((syncErr) => {
@@ -1560,6 +1687,8 @@ const WheelchairServicesPage = () => {
     passengerType: string,
     notes: string,
     assignedStaff: string,
+    ticketPassenger?: TicketPassenger,
+    serviceTerminal = activeTab,
   ) => {
     const cleanNotes = notes.trim();
     const insertPayload = {
@@ -1568,8 +1697,15 @@ const WheelchairServicesPage = () => {
       wheelchair_id: wheelchairId,
       passenger_type: passengerType,
       notes: cleanNotes,
-      terminal: activeTab,
+      terminal: serviceTerminal,
       created_by: currentUser,
+      ...(ticketPassenger ? {
+        passenger_name: ticketPassenger.passengerName,
+        passenger_seat: ticketPassenger.seat || null,
+        delivery_stage: "ready",
+        delivery_stage_updated_at: new Date().toISOString(),
+        delivery_stage_updated_by: currentUser,
+      } : {}),
     };
 
     const { error } = await supabase.from("wheelchair_services").insert(insertPayload);
@@ -1582,8 +1718,15 @@ const WheelchairServicesPage = () => {
         wheelchair_id: wheelchairId,
         passenger_type: passengerType,
         notes: fallbackNotes,
-        terminal: activeTab,
+        terminal: serviceTerminal,
         created_by: currentUser,
+        ...(ticketPassenger ? {
+          passenger_name: ticketPassenger.passengerName,
+          passenger_seat: ticketPassenger.seat || null,
+          delivery_stage: "ready",
+          delivery_stage_updated_at: new Date().toISOString(),
+          delivery_stage_updated_by: currentUser,
+        } : {}),
       });
       if (fallbackError) throw fallbackError;
     }
@@ -1591,7 +1734,7 @@ const WheelchairServicesPage = () => {
     await supabase.from("action_logs").insert({
       wheelchair_id: wheelchairId,
       action: "Hizmet Eklendi",
-      details: `${flight.flight_iata} • ${passengerType} • Atanan: ${assignedStaff}${cleanNotes ? ` • ${cleanNotes}` : ""}`,
+      details: `${flight.flight_iata} • ${passengerType}${ticketPassenger ? ` • Yolcu: ${ticketPassenger.passengerName}` : ""} • Atanan: ${assignedStaff}${cleanNotes ? ` • ${cleanNotes}` : ""}`,
       performed_by: currentUser,
     });
 
@@ -1602,7 +1745,7 @@ const WheelchairServicesPage = () => {
       flight_iata: flight.flight_iata,
       notes: cleanNotes,
       passenger_type: passengerType,
-      terminal: activeTab,
+      terminal: serviceTerminal,
       wheelchair_id: wheelchairId,
       dep_gate: getDisplayGate(flight),
       notification_kind: "service-created",
@@ -1610,7 +1753,7 @@ const WheelchairServicesPage = () => {
     }).catch((e) => console.error("Push notification failed:", e));
 
     toast.success(`${flight.flight_iata} için hizmet kaydedildi`, {
-      description: `${passengerType} • ${wheelchairId} • ${assignedStaff}`,
+      description: `${ticketPassenger ? `${ticketPassenger.passengerName} • ` : ""}${passengerType} • ${wheelchairId} • ${assignedStaff}`,
     });
 
     fetchServices();
@@ -1725,10 +1868,18 @@ const WheelchairServicesPage = () => {
     if (isServiceCompleted(service)) return;
 
     const nextNotes = markServiceAsCompleted(service.notes);
+    const completedAt = new Date().toISOString();
     try {
       const { error } = await supabase
         .from("wheelchair_services")
-        .update({ notes: nextNotes })
+        .update({
+          notes: nextNotes,
+          ...(service.passenger_name ? {
+            delivery_stage: "completed",
+            delivery_stage_updated_at: completedAt,
+            delivery_stage_updated_by: currentUser,
+          } : {}),
+        })
         .eq("id", service.id);
 
       if (error) throw error;
@@ -1740,7 +1891,19 @@ const WheelchairServicesPage = () => {
         performed_by: currentUser,
       });
 
-      setServices((prev) => prev.map((item) => (item.id === service.id ? { ...item, notes: nextNotes } : item)));
+      setServices((prev) => prev.map((item) => (
+        item.id === service.id
+          ? {
+            ...item,
+            notes: nextNotes,
+            ...(service.passenger_name ? {
+              delivery_stage: "completed",
+              delivery_stage_updated_at: completedAt,
+              delivery_stage_updated_by: currentUser,
+            } : {}),
+          }
+          : item
+      )));
       toast.success(`${service.flight_iata} hizmeti tamamlandı olarak işaretlendi`);
 
       void syncSheetsData().catch((syncErr) => {
@@ -1749,6 +1912,44 @@ const WheelchairServicesPage = () => {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Bilinmeyen hata";
       toast.error("Hizmet tamamlandı olarak işaretlenemedi: " + message);
+    }
+  };
+
+  const handleDeliveryStageChange = async (service: WheelchairService, stage: "gate" | "boarding") => {
+    if (!service.passenger_name || isServiceCompleted(service)) return;
+
+    const updatedAt = new Date().toISOString();
+    try {
+      const { error } = await supabase
+        .from("wheelchair_services")
+        .update({
+          delivery_stage: stage,
+          delivery_stage_updated_at: updatedAt,
+          delivery_stage_updated_by: currentUser,
+        })
+        .eq("id", service.id);
+
+      if (error) throw error;
+
+      await supabase.from("action_logs").insert({
+        wheelchair_id: service.wheelchair_id,
+        action: stage === "gate" ? "Yolcu Gate'e Bırakıldı" : "Boarding Başladı",
+        details: `${service.flight_iata} • ${service.passenger_name} • ${service.passenger_type}`,
+        performed_by: currentUser,
+      });
+
+      setServices((previous) => previous.map((item) => item.id === service.id
+        ? {
+          ...item,
+          delivery_stage: stage,
+          delivery_stage_updated_at: updatedAt,
+          delivery_stage_updated_by: currentUser,
+        }
+        : item));
+      toast.success(`${service.passenger_name}: ${DELIVERY_STAGE_LABELS[stage]}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Bilinmeyen hata";
+      toast.error(`Yolcu aşaması kaydedilemedi: ${message}`);
     }
   };
 
@@ -1845,7 +2046,7 @@ const WheelchairServicesPage = () => {
         if (!q) return true;
         const assignedStaff = extractAssignedStaffFromService(service);
         const visibleNotes = getVisibleServiceNotes(service.notes);
-        return [service.flight_iata, service.wheelchair_id, service.passenger_type, visibleNotes, service.created_by]
+        return [service.flight_iata, service.wheelchair_id, service.passenger_type, service.passenger_name || "", service.passenger_seat || "", visibleNotes, service.created_by]
           .concat(assignedStaff)
           .join(" ")
           .toLocaleLowerCase("tr")
@@ -1922,6 +2123,25 @@ const WheelchairServicesPage = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background/80 px-2 py-1">
+              <Bell className={cn("h-4 w-4", serviceAlertsEnabled ? "text-primary" : "text-muted-foreground")} />
+              <span className="hidden text-xs font-medium sm:inline">
+                Hizmet bildirimleri
+              </span>
+              <span className={cn(
+                "text-[10px] font-semibold",
+                serviceAlertsEnabled ? "text-primary" : "text-muted-foreground",
+              )}>
+                {serviceAlertsEnabled ? "Açık" : "Kapalı"}
+              </span>
+              <Switch
+                checked={serviceAlertsEnabled}
+                disabled={serviceAlertsPreferenceLoading || savingServiceAlertsPreference}
+                onCheckedChange={handleServiceAlertsChange}
+                aria-label="Hizmet bildirimlerini aç veya kapat"
+                title={serviceAlertsEnabled ? "Hizmet bildirimleri açık" : "Hizmet bildirimleri kapalı"}
+              />
+            </div>
             <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Canlı
@@ -2017,13 +2237,23 @@ const WheelchairServicesPage = () => {
 
                 {/* ── Left: Active Services ── */}
                 <section>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="mb-3 space-y-2">
                     <div className="flex items-center gap-2">
                       <h2 className="font-heading font-semibold text-sm uppercase tracking-wide text-muted-foreground">Aktif Hizmetler</h2>
                       {visibleTerminalServices.length > 0 && (
                         <Badge variant="secondary" className="text-xs h-5 px-1.5">{visibleTerminalServices.length}</Badge>
                       )}
                     </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start gap-2 border-primary/30 text-primary hover:bg-primary/5"
+                      onClick={() => setShowTicketPassengerDialog(true)}
+                    >
+                      <ScanLine className="h-4 w-4" />
+                      Bilet ile Yolcu Ekle
+                    </Button>
                   </div>
 
                   {loading ? (
@@ -2095,6 +2325,27 @@ const WheelchairServicesPage = () => {
                                         </>
                                       )}
                                     </div>
+                                    {service.passenger_name && (
+                                      <div className="mt-2 rounded-lg border border-primary/15 bg-primary/[0.04] px-2.5 py-2">
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                          <span className="text-xs font-semibold text-foreground">{service.passenger_name}</span>
+                                          {service.passenger_seat && (
+                                            <Badge variant="outline" className="h-4 px-1 text-[10px]">Koltuk {service.passenger_seat}</Badge>
+                                          )}
+                                          <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                                            {DELIVERY_STAGE_LABELS[service.delivery_stage || "ready"]}
+                                          </Badge>
+                                        </div>
+                                        {service.delivery_stage_updated_by && (
+                                          <p className="mt-1 text-[10px] text-muted-foreground">
+                                            Son işlem: {service.delivery_stage_updated_by}
+                                            {service.delivery_stage_updated_at
+                                              ? ` · ${new Date(service.delivery_stage_updated_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`
+                                              : ""}
+                                          </p>
+                                        )}
+                                      </div>
+                                    )}
                                     {/* Expandable: notes + created by */}
                                     {isExpanded && (
                                       <div className="mt-2 space-y-1 text-xs text-muted-foreground">
@@ -2108,6 +2359,30 @@ const WheelchairServicesPage = () => {
                                 </div>
 
                                 <div className="flex items-center gap-1 flex-shrink-0">
+                                  {service.passenger_name && !isServiceCompleted(service) && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 px-2 text-[10px]"
+                                      onClick={() => {
+                                        const stage = service.delivery_stage || "ready";
+                                        if (stage === "ready") {
+                                          void handleDeliveryStageChange(service, "gate");
+                                        } else if (stage === "gate") {
+                                          void handleDeliveryStageChange(service, "boarding");
+                                        } else {
+                                          void handleCompleteService(service);
+                                        }
+                                      }}
+                                    >
+                                      {service.delivery_stage === "ready" || !service.delivery_stage
+                                        ? "Gate'e bırakıldı"
+                                        : service.delivery_stage === "gate"
+                                          ? "Boarding"
+                                          : "Boarding tamamlandı"}
+                                    </Button>
+                                  )}
                                   <span className="text-[10px] font-mono text-muted-foreground">{createdTime}</span>
                                   {(visibleNotes || service.created_by) && (
                                     <Button
@@ -2520,6 +2795,36 @@ const WheelchairServicesPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <TicketPassengerDialog
+        open={showTicketPassengerDialog}
+        onOpenChange={setShowTicketPassengerDialog}
+        flights={flights}
+        terminalLabel="İç Hat ve T2"
+        wheelchairs={terminalWheelchairs.filter((wheelchair) => wheelchair.status === "available")}
+        currentUser={currentUser}
+        onFlightSelected={(ticketFlight) => {
+          const flight = flights.find((item) => item.flight_iata === ticketFlight.flight_iata);
+          if (flight) setActiveTab(resolveFlightTerminal(flight));
+        }}
+        onConfirm={async (ticketFlight, passenger, service) => {
+          const flight = flights.find((item) => item.flight_iata === ticketFlight.flight_iata);
+          if (!flight) {
+            throw new Error("Bilet uçuşu artık listede bulunmuyor. Uçuş listesini yenileyip tekrar deneyin.");
+          }
+          const serviceTerminal = resolveFlightTerminal(flight);
+          setActiveTab(serviceTerminal);
+          await handleAddService(
+            flight,
+            service.wheelchairId,
+            service.passengerType,
+            service.notes,
+            currentUser,
+            passenger,
+            serviceTerminal,
+          );
+        }}
+      />
 
       {/* Add Service Dialog */}
       <AddServiceDialog

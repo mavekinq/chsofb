@@ -22,25 +22,44 @@ const ServiceRealtimeListener = () => {
             return;
           }
 
-          const service = payload.new as WheelchairServiceRow;
-          if (!service?.id || recentServiceIdsRef.current.includes(service.id)) {
-            return;
-          }
+          void (async () => {
+            const userName = localStorage.getItem("userName");
+            if (userName) {
+              const { data, error } = await supabase
+                .from("users")
+                .select("service_alerts_enabled")
+                .eq("full_name", userName)
+                .maybeSingle();
 
-          recentServiceIdsRef.current = [service.id, ...recentServiceIdsRef.current].slice(0, MAX_RECENT_SERVICE_IDS);
+              if (error) {
+                console.error("Service alert preference fetch failed:", error);
+                return;
+              }
+              if (data?.service_alerts_enabled === false) {
+                return;
+              }
+            }
 
-          const assignedStaff = extractAssignedStaffFromService(service) || "Belirtilmedi";
-          const visibleNotes = getVisibleServiceNotes(service.notes);
+            const service = payload.new as WheelchairServiceRow;
+            if (!service?.id || recentServiceIdsRef.current.includes(service.id)) {
+              return;
+            }
 
-          if (document.visibilityState === "visible" && isServiceToastEnabled()) {
-            toast.success(`Yeni hizmet: ${service.flight_iata}`, {
-              description: `${service.wheelchair_id} • ${service.passenger_type} • Atanan: ${assignedStaff}${visibleNotes ? ` • ${visibleNotes}` : ""}`,
+            recentServiceIdsRef.current = [service.id, ...recentServiceIdsRef.current].slice(0, MAX_RECENT_SERVICE_IDS);
+
+            const assignedStaff = extractAssignedStaffFromService(service) || "Belirtilmedi";
+            const visibleNotes = getVisibleServiceNotes(service.notes);
+
+            if (document.visibilityState === "visible" && isServiceToastEnabled()) {
+              toast.success(`Yeni hizmet: ${service.flight_iata}`, {
+                description: `${service.wheelchair_id} • ${service.passenger_type} • Atanan: ${assignedStaff}${visibleNotes ? ` • ${visibleNotes}` : ""}`,
+              });
+            }
+
+            void showRealtimeServiceAlert(service).catch((error) => {
+              console.error("Realtime service alert failed:", error);
             });
-          }
-
-          void showRealtimeServiceAlert(service).catch((error) => {
-            console.error("Realtime service alert failed:", error);
-          });
+          })();
         },
       )
       .subscribe();

@@ -310,9 +310,14 @@ export type Database = {
           assigned_staff: string
           created_at: string
           created_by: string
+          delivery_stage: string | null
+          delivery_stage_updated_at: string | null
+          delivery_stage_updated_by: string | null
           flight_iata: string
           id: string
           notes: string
+          passenger_name: string | null
+          passenger_seat: string | null
           passenger_type: string
           terminal: string
           wheelchair_id: string
@@ -321,9 +326,14 @@ export type Database = {
           assigned_staff?: string
           created_at?: string
           created_by?: string
+          delivery_stage?: string | null
+          delivery_stage_updated_at?: string | null
+          delivery_stage_updated_by?: string | null
           flight_iata: string
           id?: string
           notes?: string
+          passenger_name?: string | null
+          passenger_seat?: string | null
           passenger_type: string
           terminal?: string
           wheelchair_id: string
@@ -332,9 +342,14 @@ export type Database = {
           assigned_staff?: string
           created_at?: string
           created_by?: string
+          delivery_stage?: string | null
+          delivery_stage_updated_at?: string | null
+          delivery_stage_updated_by?: string | null
           flight_iata?: string
           id?: string
           notes?: string
+          passenger_name?: string | null
+          passenger_seat?: string | null
           passenger_type?: string
           terminal?: string
           wheelchair_id?: string
@@ -381,6 +396,7 @@ export type Database = {
           id: string
           is_admin: boolean
           notification_enabled: boolean
+          service_alerts_enabled: boolean
           security_number: string | null
           updated_at: string
         }
@@ -390,6 +406,7 @@ export type Database = {
           id?: string
           is_admin?: boolean
           notification_enabled?: boolean
+          service_alerts_enabled?: boolean
           security_number?: string | null
           updated_at?: string
         }
@@ -399,6 +416,7 @@ export type Database = {
           id?: string
           is_admin?: boolean
           notification_enabled?: boolean
+          service_alerts_enabled?: boolean
           security_number?: string | null
           updated_at?: string
         }

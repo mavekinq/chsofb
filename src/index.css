@@ -90,6 +90,11 @@
   48%, 62% { opacity: 1; }
 }
 
+@keyframes ticket-scan {
+  0%, 100% { top: 0; }
+  50% { top: 100%; }
+}
+
 .seatbelt-strap-left {
   transform-box: fill-box;
   transform-origin: right center;
@@ -115,6 +120,10 @@
   .seatbelt-strap-right,
   .seatbelt-buckle,
   .seatbelt-spark {
+    animation: none;
+  }
+
+  .ticket-scan-line {
     animation: none;
   }
 }
